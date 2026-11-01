@@ -82,9 +82,18 @@ The full endpoint contracts and the false-positive trace are in [design.md](desi
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** Normally, the combined score is a weighted average of the model score and the style score. But if the two signals differ by more than 0.30, I don't average them. I use the lower (more human) of the two instead. I chose this because a wrongly accused writer pays more than a missed AI text does, so an AI-leaning combined score should need *both* signals to lean that way. The cost is that when the signals split on text that really is AI, it comes out lower and is more likely to land in "unsure" instead of "AI".
 
 **The numbers:**
+
+| Setting | Value | Where |
+|---|---|---|
+| Model signal weight | 0.5 | `config.py::WEIGHT_MODEL_SIGNAL` |
+| Style signal weight | 0.5 | `config.py::WEIGHT_STYLE_SIGNAL` |
+| Disagreement gap | 0.30 | `config.py::DISAGREEMENT_GAP` |
+| Style measure weights (spread / vocabulary / punctuation) | 0.5 / 0.3 / 0.2 | `config.py::STYLE_WEIGHT_*` |
+
+The style measures are scaled onto 0–1 with first-guess cut-offs set at the top of `stylometry.py`. They are not calibrated yet.
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -93,7 +102,30 @@ The full endpoint contracts and the false-positive trace are in [design.md](desi
 
 **A case where my two signals split, and what my rule does with it:**
 
+My `formal_human` test text (a polite message I wrote myself) scored 0.583 on the model signal, which leans AI, but 0.250 on the style signal, which leans human. That is a gap of 0.333, more than 0.30, so my rule uses the lower score and the combined score is 0.250. A plain average would have given 0.417, so the rule moves a real person's writing further from an AI label. The same rule also pulls clearly-AI text down: my `ai` sample scored 0.834 on the model but only 0.460 on style, so its combined score is 0.460 and it lands in "unsure".
 
+### What my calibration inputs showed
+
+Scores are 0–1, higher means more likely AI. `compare.py` prints this table from the files in `calibration/`. Sources: `ai` and `ai_edited` are AI-written text I generated (`ai_edited` has light human-style edits); `human` and `formal_human` are short messages I wrote myself; `pet_article` and `doll_article` are excerpts from articles whose authors I don't know (the pet one reads AI-like, the doll one reads human-like), so they are not treated as ground truth.
+
+| input | words | model | style | combined |
+|---|---|---|---|---|
+| ai | 94 | 0.834 | 0.460 | 0.460 |
+| ai_edited | 87 | 0.604 | 0.461 | 0.532 |
+| pet_article | 70 | 0.833 | 0.625 | 0.729 |
+| human | 30 | 0.490 | 0.520 | 0.505 |
+| formal_human | 24 | 0.583 | 0.250 | 0.250 |
+| doll_article | 98 | 0.386 | 0.216 | 0.301 |
+
+What I found:
+
+- **The style signal separates the two longer articles well** (pet 0.625, doll 0.216). Sentence-length spread carries it. Vocabulary variety and punctuation contributed almost nothing on the AI samples.
+- **The signals do not reliably separate AI from human on short or lightly edited text.** My short casual human text (0.505) scored above my clearly-AI sample (0.460), and lightly edited AI (0.532) is close to that human text.
+- **My combining rule hurts on the clean AI sample.** The model gave `ai` 0.834 but style gave 0.460, a gap over 0.30, so the rule used the lower score and it landed in "unsure". A plain average would have given 0.647.
+- **A short human text can look AI-like to the style signal.** `human` is two sentences of almost equal length, so the spread measure read it as machine-like. Short texts are unreliable.
+- **The gap between clear AI and clear human is small.** The best pair (`pet_article` and `doll_article`) is about 0.43 apart on the combined score, well under the 0.7 my criterion 2 asks for.
+- **All three labels look reachable** with the current placeholder thresholds (0.35 and 0.65): `pet_article` is above 0.65, `formal_human` and `doll_article` are below 0.35, and the rest are between.
+- **Not changed:** I did not tune the style cut-offs, because six texts is too few to tune on without just fitting them.
 
 ---
 
@@ -134,11 +166,45 @@ The full endpoint contracts and the false-positive trace are in [design.md](desi
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "I went to the shop on Tuesday and the guy at the counter was arguing with his phone, so I just stood there for ten minutes. Honestly? Best part of my week.", "creator_id": "me"}'
 ```
 
 ```json
+{
+  "confidence": 0.6245,
+  "content_id": "32a7225e-cd50-41b1-8261-a60ab1e3550e",
+  "guess": "unsure",
+  "label": "PLACEHOLDER label",
+  "model_score": 0.6245,
+  "style_score": null
+}
+```
 
+<!-- Milestone 3 output: signal two (style_score), the combined score and the
+     real label come in Milestones 4 and 5. Re-run and re-paste this block
+     once they exist. -->
+
+**Bad input** (each is rejected with a clear message and logged)
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"creator_id": "me"}'
+$ curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"text": "   ", "creator_id": "me"}'
+$ curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"text": "I love cookies", "creator_id": "me"}'
+```
+
+```json
+{
+  "error": "missing_field",
+  "message": "Please provide text and creator_id."
+}
+{
+  "error": "empty_text",
+  "message": "Please provide text input."
+}
+{
+  "error": "text_too_short",
+  "message": "Please provide at least 20 words."
+}
 ```
 
 **An appeal**
@@ -160,7 +226,30 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
+{
+  "count": 1,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "32a7225e-cd50-41b1-8261-a60ab1e3550e",
+      "creator_id": "me",
+      "guess": "unsure",
+      "label": "PLACEHOLDER label",
+      "model_score": 0.6245,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-01T17:30:53+00:00"
+    }
+  ]
+}
+```
 
+The three bad requests above are logged as rejections in `logs/audit.jsonl`:
+
+```json
+{"timestamp": "2026-11-01T17:31:13+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "missing_field"}
+{"timestamp": "2026-11-01T17:31:13+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "empty_text"}
+{"timestamp": "2026-11-01T17:31:13+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "text_too_short"}
 ```
 
 ---
