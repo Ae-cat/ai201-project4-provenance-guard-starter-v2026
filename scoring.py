@@ -52,11 +52,26 @@ def combine_signals(model_score: float, style_score: float) -> float:
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
     """
-    # TODO: replace this
-    return (
+    # THE RULE (Milestone 4):
+    #   1. Normally: a weighted average of the two scores, with the weights in
+    #      config.py (WEIGHT_MODEL_SIGNAL, WEIGHT_STYLE_SIGNAL).
+    #   2. But if the signals differ by more than config.DISAGREEMENT_GAP, don't
+    #      average: use the LOWER (more human) of the two.
+    #
+    # Why: a wrongly flagged writer pays more than a missed AI text does, so an
+    # AI-leaning combined score should need BOTH signals to lean that way. One
+    # signal alone saying "AI" is not enough. The cost: when the signals split
+    # on genuinely AI text, it comes out lower and is more likely to land in
+    # "unsure" instead of "AI".
+    total = config.WEIGHT_MODEL_SIGNAL + config.WEIGHT_STYLE_SIGNAL
+    average = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
-    )
+    ) / total
+
+    if abs(model_score - style_score) > config.DISAGREEMENT_GAP:
+        return round(min(model_score, style_score), 4)
+    return round(average, 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
