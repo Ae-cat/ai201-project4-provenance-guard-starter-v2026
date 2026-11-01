@@ -47,6 +47,18 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 DETECTOR_MAX_TOKENS = 400
 
 
+# ─── Input limits ────────────────────────────────────────────────────────────
+# Text outside these limits is rejected before any signal runs.
+#
+# Below MIN_WORDS the detector returns a confident-looking score that means
+# nothing (a 3-word input scored 0.0005 in testing). The detector also only
+# reads the first DETECTOR_MAX_TOKENS tokens, so anything past that is accepted
+# but not scored; MAX_TEXT_CHARS just stops absurdly large requests.
+
+MIN_WORDS = 20
+MAX_TEXT_CHARS = 10_000
+
+
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
 #

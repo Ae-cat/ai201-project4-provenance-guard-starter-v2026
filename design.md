@@ -59,7 +59,7 @@ Written before building anything. The path and signals are summarised in the REA
 |---|---|---|
 | body isn't JSON, or `text` / `creator_id` missing | 400 | `missing_field` |
 | `text` empty or whitespace only | 400 | `empty_text` |
-| `text` under 3 tokens (too short to score) | 400 | `text_too_short` |
+| `text` under 20 words (a 3-word input scored a meaningless 0.0005) | 400 | `text_too_short` |
 | `text` over 10,000 characters | 413 | `text_too_long` |
 | model not downloaded or can't load | 503 | `detector_unavailable` |
 

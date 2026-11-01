@@ -43,7 +43,6 @@ Two things worth knowing before you pick numbers:
 
 ---
 ## 1. False positives
-
 Of 5 pieces of writing that a human wrote, at most 2 receive the high-confidence AI label.
 
 **Why this target:** Many people don't write in a formal or varied style. Someone writing in a language they know less well tends to use simple, common words, which look like AI to the system. I expect some wrongly flagged writers because of that, and I accept up to 2 in 5. Furthermore, human writers tend to use less punctuation than AI-generated text.

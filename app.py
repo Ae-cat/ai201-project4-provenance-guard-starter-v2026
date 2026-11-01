@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -199,17 +200,70 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
 
-    # TODO: delete this and build the route.
+    # ── Validate the input before any signal runs ────────────────────────────
+    if not isinstance(payload, dict):
+        return _reject("unknown", 400, "missing_field",
+                       "Send a JSON object with text and creator_id.")
+
+    text = payload.get("text")
+    creator_id = payload.get("creator_id")
+    who = creator_id if isinstance(creator_id, str) and creator_id.strip() else "unknown"
+
+    if not isinstance(text, str) or not isinstance(creator_id, str) or not creator_id.strip():
+        return _reject(who, 400, "missing_field",
+                       "Please provide text and creator_id.")
+    if not text.strip():
+        return _reject(who, 400, "empty_text",
+                       "Please provide text input.")
+    if len(text) > config.MAX_TEXT_CHARS:
+        return _reject(who, 413, "text_too_long",
+                       f"Text is over {config.MAX_TEXT_CHARS} characters.")
+    if len(text.split()) < config.MIN_WORDS:
+        return _reject(who, 400, "text_too_short",
+                       f"Please provide at least {config.MIN_WORDS} words.")
+
+    # ── Signal one (Milestone 3). Signal two and the combining rule come in
+    #    Milestone 4, the real label in Milestone 5. ──────────────────────────
+    try:
+        model_score = detector.model_signal(text)
+    except detector.DetectorUnavailable as exc:
+        return _reject(who, 503, "detector_unavailable", str(exc).splitlines()[0])
+
+    content_id = str(uuid.uuid4())
+
+    # Placeholders until Milestones 4 and 5.
+    guess = "unsure"
+    confidence = model_score          # placeholder: will become the combined score
+    label = "PLACEHOLDER label"
+    style_score = None                # placeholder: signal two comes next
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=None,
+        label=label,
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+    })
+
+
+def _reject(creator_id: str, status: int, error: str, message: str):
+    """Refuse a bad request, and leave a trace of it in the log."""
+    audit.log_rejection(creator_id=creator_id, reason=error)
+    return jsonify({"error": error, "message": message}), status
 
 
 @app.post("/appeal")
