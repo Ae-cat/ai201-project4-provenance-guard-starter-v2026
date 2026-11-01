@@ -39,7 +39,17 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+A writer submits text with a creator ID, and it passes through these steps:
 
+1. **`POST /submit` (`app.py`)** receives JSON with `text` and `creator_id`. It checks the input (missing, empty or too-long text is rejected) and adds a **`content_id`** that identifies this submission from here on, including in the appeal.
+2. **`detector.py` (signal one)** receives the text and adds the **model score**: a 0–1 number where higher means more likely AI. It runs gpt2 locally and measures perplexity, meaning how predictable the text is.
+3. **`stylometry.py` (signal two)** receives the text and adds the **style score**: a 0–1 number where higher means more likely AI. It measures the shape of the text: sentence-length spread, vocabulary variety and punctuation.
+4. **`scoring.py::combine_signals`** receives both scores and adds the **combined score** (0–1). The weights are defined in `config.py`.
+5. **`scoring.py::score_to_label`** receives the combined score and adds the **guess** (`ai`, `human` or `unsure`) and the **label text**, a plain sentence a non-technical reader can understand. Thresholds are in `config.py`.
+6. **`audit.py`** receives the full decision and appends it to `logs/audit.jsonl`: timestamp, `content_id`, `creator_id`, guess, both signal scores, combined score, label and status (`decided`).
+7. **The response** returns `content_id`, `guess`, `confidence`, `label`, `model_score` and `style_score` to the writer. `confidence` is the combined score, where higher means more likely AI (not how sure the system is of its guess). If the writer disagrees, `POST /appeal` takes the `content_id` and their reasoning and moves the item to `under_review`.
+
+The full endpoint contracts and the false-positive trace are in [design.md](design.md).
 
 ---
 
@@ -53,19 +63,19 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** How predictable the text is to a language model (gpt2, running locally), as perplexity. Low perplexity means the model finds the text easy to predict. The result is squashed onto a 0–1 score where higher means more likely AI.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI writes by repeatedly choosing a likely next word, so its text tends to be easy for a model to predict. Human writing wanders more: odd word choices, abrupt turns, specific details.
 
-**What it can't see:**
+**What it can't see:** Predictability is not authorship. Human writing can be predictable too, especially with direct quotes and common expressions. The writers most at risk are the ones who write plainly with common words and short sentences, such as non-native English writers, younger writers, or anyone writing simply on purpose. They can score as machine-like even though they wrote every word. AI writing can also be unpredictable, so this signal alone can't determine who wrote a piece.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text as text, without understanding it: how much sentence length varies, how varied the vocabulary is (unique words over total words), and how much punctuation is used.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI prose tends toward even, mid-length sentences and a narrower band of vocabulary. Human writing is lumpier, for example a three-word sentence next to a forty-word one.
 
-**What it can't see:**
+**What it can't see:** It can't read, so it has no idea what the text says. Many human writers have wide vocabularies and polished technique, which can look AI-like. AI can be prompted to imitate a person's style. Cheap changes such as adding typos, breaking up sentences or pasting in a quotation shift the score without changing who wrote the text.
 
 ### The combining rule
 
