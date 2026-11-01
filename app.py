@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 app = Flask(__name__)
 
@@ -224,20 +226,21 @@ def submit():
         return _reject(who, 400, "text_too_short",
                        f"Please provide at least {config.MIN_WORDS} words.")
 
-    # ── Signal one (Milestone 3). Signal two and the combining rule come in
-    #    Milestone 4, the real label in Milestone 5. ──────────────────────────
+    # ── Signals (Milestones 3 and 4), then the combining rule. The real label
+    #    comes in Milestone 5. ───────────────────────────────────────────────
     try:
         model_score = detector.model_signal(text)
     except detector.DetectorUnavailable as exc:
         return _reject(who, 503, "detector_unavailable", str(exc).splitlines()[0])
 
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(model_score, style_score)
+
     content_id = str(uuid.uuid4())
 
-    # Placeholders until Milestones 4 and 5.
+    # Placeholders until Milestone 5.
     guess = "unsure"
-    confidence = model_score          # placeholder: will become the combined score
     label = "PLACEHOLDER label"
-    style_score = None                # placeholder: signal two comes next
 
     audit.log_decision(
         content_id=content_id,
@@ -245,7 +248,7 @@ def submit():
         guess=guess,
         model_score=model_score,
         style_score=style_score,
-        combined_score=None,
+        combined_score=combined_score,
         label=label,
         status="decided",
     )
@@ -253,7 +256,7 @@ def submit():
     return jsonify({
         "content_id": content_id,
         "guess": guess,
-        "confidence": confidence,
+        "confidence": combined_score,
         "label": label,
         "model_score": model_score,
         "style_score": style_score,
