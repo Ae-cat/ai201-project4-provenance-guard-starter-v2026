@@ -138,16 +138,15 @@ What I found:
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.45 | We think this was probably written by a person. If you know it wasn't, please let us know. |
+| unsure | 0.45 – 0.65 | We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know. |
+| high-confidence AI | 0.65 – 1.00 | We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal. |
+
+**Why these thresholds:** The human line is 0.45 because some human writing, such as formal work and reports, can score highly, so a text has to score clearly low before it earns the "human" label. The AI line is 0.65 because that is a clear point above the middle where a text can fairly be labelled AI. The middle band (0.45 to 0.65) is for text that could be human, AI, or AI-assisted, and the system can't tell which. Wrongly labelling a real writer as AI costs them more than missing some AI text, so the AI line sits well above the middle.
 
 **Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
 
-
+The system can't tell human writing, AI writing and AI-assisted writing apart in this range, so the label says exactly that: "we can't tell". I first wrote "this text may be AI assisted," but that guesses a cause the system doesn't know and would read as an accusation to someone who wrote every word themselves. I kept the invitation to respond ("please let us know") so the writer has a next step.
 
 ---
 
@@ -166,23 +165,40 @@ What I found:
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "I went to the shop on Tuesday and the guy at the counter was arguing with his phone, so I just stood there for ten minutes. Honestly? Best part of my week.", "creator_id": "me"}'
+  -d '{"text": "Pets have been a part of human lives for centuries, offering companionship, love, and a sense of purpose. The benefits of owning a pet go beyond the joy of having a furry friend to cuddle with. From physical to psychological advantages, the perks of pet ownership are vast and varied. In this article, we\u2019ll delve deep into the myriad benefits of pets and how they can positively impact our lives.", "creator_id": "me"}'
 ```
 
 ```json
 {
-  "confidence": 0.6245,
-  "content_id": "32a7225e-cd50-41b1-8261-a60ab1e3550e",
-  "guess": "unsure",
-  "label": "PLACEHOLDER label",
-  "model_score": 0.6245,
-  "style_score": null
+  "confidence": 0.7292,
+  "content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320",
+  "guess": "ai",
+  "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+  "model_score": 0.8333,
+  "style_score": 0.6251
 }
 ```
 
-<!-- Milestone 3 output: signal two (style_score), the combined score and the
-     real label come in Milestones 4 and 5. Re-run and re-paste this block
-     once they exist. -->
+**All three labels are reachable.** The same service, run on three other texts with `python submit_file.py <file>`, returns each label:
+
+```json
+{
+  "confidence": 0.3009,
+  "content_id": "7282eaf4-27c0-48a5-be6f-264eeb7508ca",
+  "guess": "human",
+  "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+  "model_score": 0.3856,
+  "style_score": 0.2162
+}
+{
+  "confidence": 0.5048,
+  "content_id": "4ae25f5c-915f-4230-9330-3171a2e38c4e",
+  "guess": "unsure",
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "model_score": 0.4896,
+  "style_score": 0.52
+}
+```
 
 **Bad input** (each is rejected with a clear message and logged)
 
@@ -212,11 +228,28 @@ $ curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+  -d '{"content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320", "reasoning": "I wrote this myself."}'
 ```
 
 ```json
+{
+  "content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320",
+  "message": "Thanks. Your appeal has been recorded and this item is now under review.",
+  "status": "under_review"
+}
+```
 
+Appealing the same item again, or using an id that doesn't exist, is refused and logged:
+
+```json
+{
+  "error": "already_under_review",
+  "message": "This item is already under review."
+}
+{
+  "error": "unknown_content_id",
+  "message": "We couldn't find a submission with that content_id."
+}
 ```
 
 **What the log shows afterwards**
@@ -227,21 +260,47 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ```json
 {
-  "count": 1,
+  "count": 3,
   "entries": [
     {
-      "combined_score": null,
-      "content_id": "32a7225e-cd50-41b1-8261-a60ab1e3550e",
+      "combined_score": 0.3009,
+      "content_id": "7282eaf4-27c0-48a5-be6f-264eeb7508ca",
+      "creator_id": "me",
+      "guess": "human",
+      "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+      "model_score": 0.3856,
+      "status": "decided",
+      "style_score": 0.2162,
+      "timestamp": "2026-11-02T05:19:40+00:00"
+    },
+    {
+      "combined_score": 0.5048,
+      "content_id": "4ae25f5c-915f-4230-9330-3171a2e38c4e",
       "creator_id": "me",
       "guess": "unsure",
-      "label": "PLACEHOLDER label",
-      "model_score": 0.6245,
+      "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+      "model_score": 0.4896,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-01T17:30:53+00:00"
+      "style_score": 0.52,
+      "timestamp": "2026-11-02T05:19:40+00:00"
+    },
+    {
+      "content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320",
+      "creator_id": "me",
+      "event": "appeal",
+      "reasoning": "I wrote this myself.",
+      "status": "under_review",
+      "timestamp": "2026-11-02T05:20:12+00:00"
     }
   ]
 }
+```
+
+The appeal sits after the original decision for the same `content_id` (the log is append-only, so the decision is not overwritten). Both lines from `logs/audit.jsonl`:
+
+```json
+{"timestamp": "2026-11-02T05:19:39+00:00", "content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320", "creator_id": "me", "guess": "ai", "model_score": 0.8333, "style_score": 0.6251, "combined_score": 0.7292, "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.", "status": "decided"}
+{"timestamp": "2026-11-02T05:20:12+00:00", "content_id": "ebefaade-0ed2-4c55-8c9c-ae1dad87b320", "creator_id": "me", "event": "appeal", "status": "under_review", "reasoning": "I wrote this myself."}
 ```
 
 The three bad requests above are logged as rejections in `logs/audit.jsonl`:
