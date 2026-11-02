@@ -226,8 +226,7 @@ def submit():
         return _reject(who, 400, "text_too_short",
                        f"Please provide at least {config.MIN_WORDS} words.")
 
-    # ── Signals (Milestones 3 and 4), then the combining rule. The real label
-    #    comes in Milestone 5. ───────────────────────────────────────────────
+    # ── Signals (Milestones 3 and 4), then the combining rule, then the label. ───────────────────────────────────────────────
     try:
         model_score = detector.model_signal(text)
     except detector.DetectorUnavailable as exc:
@@ -238,9 +237,7 @@ def submit():
 
     content_id = str(uuid.uuid4())
 
-    # Placeholders until Milestone 5.
-    guess = "unsure"
-    label = "PLACEHOLDER label"
+    guess, label = scoring.score_to_label(combined_score)
 
     audit.log_decision(
         content_id=content_id,
@@ -263,9 +260,9 @@ def submit():
     })
 
 
-def _reject(creator_id: str, status: int, error: str, message: str):
+def _reject(creator_id: str, status: int, error: str, message: str, **extra):
     """Refuse a bad request, and leave a trace of it in the log."""
-    audit.log_rejection(creator_id=creator_id, reason=error)
+    audit.log_rejection(creator_id=creator_id, reason=error, **extra)
     return jsonify({"error": error, "message": message}), status
 
 
@@ -289,14 +286,48 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject("unknown", 400, "missing_field",
+                       "Send a JSON object with content_id and reasoning.")
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+
+    if (not isinstance(content_id, str) or not content_id.strip()
+            or not isinstance(reasoning, str) or not reasoning.strip()):
+        return _reject("unknown", 400, "missing_field",
+                       "Please provide content_id and reasoning.")
+    if len(reasoning) > config.MAX_APPEAL_CHARS:
+        return _reject("unknown", 413, "reasoning_too_long",
+                       f"Please keep your reasoning under {config.MAX_APPEAL_CHARS} characters.")
+
+    # Every log entry for this id. The original decision is the one with no
+    # "event" (appeals and rejections carry one).
+    entries = audit.entries_for(content_id)
+    decision = next((e for e in entries if "event" not in e), None)
+    if decision is None:
+        return _reject("unknown", 404, "unknown_content_id",
+                       "We couldn't find a submission with that content_id.",
+                       attempted_content_id=content_id)
+
+    if any(e.get("event") == "appeal" for e in entries):
+        return _reject(decision["creator_id"], 409, "already_under_review",
+                       "This item is already under review.",
+                       attempted_content_id=content_id)
+
+    # The log is append-only: this sits after the original decision.
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=decision["creator_id"],
+        reasoning=reasoning.strip(),
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Thanks. Your appeal has been recorded and this item is now under review.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────

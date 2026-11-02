@@ -57,6 +57,7 @@ DETECTOR_MAX_TOKENS = 400
 
 MIN_WORDS = 20
 MAX_TEXT_CHARS = 10_000
+MAX_APPEAL_CHARS = 2_000   # longest appeal reasoning accepted
 
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
@@ -94,7 +95,7 @@ STYLE_WEIGHT_PUNCT = 0.2    # punctuation density: the weakest, so it counts lea
 # getting through. There is no setting that avoids the trade — only settings
 # that decide who pays for it.
 
-HUMAN_THRESHOLD = 0.35
+HUMAN_THRESHOLD = 0.45
 AI_THRESHOLD = 0.65
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
