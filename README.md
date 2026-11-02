@@ -315,17 +315,17 @@ The three bad requests above are logged as rejections in `logs/audit.jsonl`:
 
 ## How I Used AI
 
-**Moment 1**
+**Moment 1: checking my labels from a writer's point of view**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I wrote my first three labels ("AI", "Human", "AI assisted writing" and a few rough fragments) and asked Claude to read each one as the writer who receives it and tell me how it comes across.
+- *What came back:* Claude said the labels read as accusations or were confusing: they weren't full sentences, never said "probably", gave the writer no next step, and "AI assisted writing" claimed something my system can't know, since my own threshold note said the middle range could be human, AI or AI-assisted.
+- *What I changed:* I rewrote them as full sentences with "probably" and "can't tell", added the appeal to the AI label, and replaced "may be AI assisted" in the unsure label with "can't tell whether a person or AI wrote this, or whether AI helped". I asked Claude to tighten my wording and chose that version because it still said what I meant.
 
-**Moment 2**
+**Moment 2: checking whether my acceptance criteria could be verified**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I wrote my five criteria and asked Claude whether someone who couldn't ask me could check each one.
+- *What came back:* Claude said several were vague (what the "5" counted, what "about 0.7" meant, "4 of 5" for a yes/no label check), and that my appeal criterion allowed 2 failures in 5 even though the appeal is plain code, not a guess, and is the only recourse for a wrongly flagged writer.
+- *What I changed:* I kept my numbers for criteria 1, 2, 3 and 5 and reworded them so each says what is counted. I revised criterion 4 to 5 of 5 valid appeals, plus an error for an unknown id. Claude drafted that revised wording at my request, and I kept it.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
