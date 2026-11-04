@@ -333,24 +333,24 @@ The three bad requests above are logged as rejections in `logs/audit.jsonl`:
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 6 per minute, 150 per day
 
-**Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+**Why those numbers and not others:** A real writer revising a piece submits one version at a time and reads the result before editing again, so 6 per minute is more than they would send, and 150 per day is far more than a person submits. A script is different: at 6 per minute it would use up 150 submissions in about 25 minutes, so the daily cap stops it from mapping my thresholds by brute force. But 150 is still enough for a careful script to find a threshold by narrowing in on it with a few dozen well-chosen tries, and a script that changes its `creator_id` each time is not limited at all. So these numbers slow a simple flood and do not stop a determined attacker.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** Each `creator_id` is counted separately (`app.py::rate_limit_key`); a request with no usable `creator_id` falls back to the caller's address. The weakness is that `creator_id` is chosen by the caller, so a script that changes it on every request is never limited, while one household sharing a single `creator_id` would be counted as one.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
+200 200 200 200 200 200 429 429 429 429 429 429 429 429 429
+```
 
+15 submissions from one `creator_id`: the first 6 were accepted and the other 9 were rate limited. All 9 rejections appear in `logs/audit.jsonl` as `"reason": "rate_limited"`, for example:
+
+```json
+{"timestamp": "2026-11-04T23:24:45+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "6 per 1 minute"}
 ```
 
 ---
