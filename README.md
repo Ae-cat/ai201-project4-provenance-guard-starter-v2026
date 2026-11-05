@@ -465,17 +465,347 @@ Both signals leaned AI, so there was no disagreement for my combining rule to ca
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing flagged as AI | at most 2 of 5 | 0/5 | 0/5 | 0/5 | MET |
+| 2. Score spread, AI vs. human | about 0.7 apart in at least 4 of 5 pairs | 0/5 | 0/5 | 0/5 | MISSED |
+| 3. Label coverage | all 3 labels appear, and at least 4 of 5 get the expected label | 3/5 (3 labels appear) | 3/5 (3 labels appear) | 3/5 (3 labels appear) | MISSED |
+| 4. The appeal path | 5 of 5 valid appeals correct, and 5 of 5 unknown ids refused | 5/5 and 5/5 | 5/5 and 5/5 | 5/5 and 5/5 | MET |
+| 5. Bad input | 5 of 5 bad inputs get a clean error, no crash | 5/5 | 5/5 | 5/5 | MET |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All three trials came out identical for every criterion, which is expected because neither signal is random. Criterion 4 can't be run by `run_eval.py` (an appeal needs a `content_id` from an earlier submission), so I wrote `run_appeal_eval.py` for it: it submits five texts, appeals each, checks the log, and appeals five unknown ids, three times. The scenarios and my expected labels for criterion 3 were written in `scenarios.py` and committed before the run.
+
+**Criterion 2, the five pairs** (combined scores from the first trial; the gap is AI text minus human text, and the target was about 0.7):
+
+| Pair (AI text vs. my own text) | AI text | My text | Gap |
+|---|---|---|---|
+| time management vs. dinner message | 0.6598 | 0.25 | +0.410 |
+| exercise vs. firework message | 0.5256 | 0.5048 | +0.021 |
+| climate vs. Timmy story | 0.3753 | 0.6148 | -0.239 |
+| reading vs. dodgeball story | 0.668 | 0.2785 | +0.390 |
+| technology vs. dogs post | 0.6194 | 0.5822 | +0.037 |
+
+The biggest gap is 0.41, and in the climate/Timmy pair my own writing scored *higher* than the AI text.
+
+**Criterion 3, expected vs. actual** (expected labels written before the run):
+
+| Text | Expected | Got |
+|---|---|---|
+| AI: time management | ai | ai |
+| AI: climate change | ai | human |
+| mine: dodgeball story | human | human |
+| mine: dogs post | human | unsure |
+| lightly edited AI: exercise | unsure | unsure |
+
+**Real output from one trial** (trial 1, pasted as text).
+
+Criterion 1, my own writing. Produced by `run_eval.py::main`, calling `app.py::submit`:
 
 ```json
+[
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.25,
+    "model_score": 0.5826,
+    "style_score": 0.25,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "I would like to attend my family's dinner this evening so I will not b"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5048,
+    "model_score": 0.4896,
+    "style_score": 0.52,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Later today there is going to be a firework show, with vendors and suc"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6148,
+    "model_score": 0.6202,
+    "style_score": 0.6094,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Timmy went out to the grocery at 3pm, he has yet to arrive back home. "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2785,
+    "model_score": 0.3906,
+    "style_score": 0.1664,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "The bell rang! It is P.E time and all the kids went running. Today was"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5822,
+    "model_score": 0.5693,
+    "style_score": 0.5951,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Scrolling through instagram, I have recently learned that dogs such as"
+  }
+]
+```
 
+Criterion 2, score spread (the same texts, AI then human in each pair). Same file and function:
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.6598,
+    "model_score": 0.7804,
+    "style_score": 0.5392,
+    "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+    "sent": "Effective time management is a crucial skill that can greatly enhance "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.25,
+    "model_score": 0.5826,
+    "style_score": 0.25,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "I would like to attend my family's dinner this evening so I will not b"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5256,
+    "model_score": 0.8818,
+    "style_score": 0.5256,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Regular physical exercise offers numerous benefits for overall health "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5048,
+    "model_score": 0.4896,
+    "style_score": 0.52,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Later today there is going to be a firework show, with vendors and suc"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3753,
+    "model_score": 0.9163,
+    "style_score": 0.3753,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "Climate change is one of the most pressing challenges facing humanity "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6148,
+    "model_score": 0.6202,
+    "style_score": 0.6094,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Timmy went out to the grocery at 3pm, he has yet to arrive back home. "
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.668,
+    "model_score": 0.7907,
+    "style_score": 0.5453,
+    "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+    "sent": "Reading is a fundamental activity that enriches the mind and expands o"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2785,
+    "model_score": 0.3906,
+    "style_score": 0.1664,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "The bell rang! It is P.E time and all the kids went running. Today was"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6194,
+    "model_score": 0.7193,
+    "style_score": 0.5194,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Technology has transformed the way people communicate, work, and learn"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5822,
+    "model_score": 0.5693,
+    "style_score": 0.5951,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Scrolling through instagram, I have recently learned that dogs such as"
+  }
+]
+```
+
+Criterion 3, label coverage. Same file and function:
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.6598,
+    "model_score": 0.7804,
+    "style_score": 0.5392,
+    "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+    "sent": "Effective time management is a crucial skill that can greatly enhance "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3753,
+    "model_score": 0.9163,
+    "style_score": 0.3753,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "Climate change is one of the most pressing challenges facing humanity "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2785,
+    "model_score": 0.3906,
+    "style_score": 0.1664,
+    "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+    "sent": "The bell rang! It is P.E time and all the kids went running. Today was"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5822,
+    "model_score": 0.5693,
+    "style_score": 0.5951,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Scrolling through instagram, I have recently learned that dogs such as"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5164,
+    "model_score": 0.8502,
+    "style_score": 0.5164,
+    "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+    "sent": "Regular exercise does a lot for your health, honestly more than most p"
+  }
+]
+```
+
+Criterion 4, the appeal path (one valid appeal with its log entries, and one unknown id). Produced by `run_appeal_eval.py::main`, calling `app.py::appeal`:
+
+```json
+[
+  {
+    "case": "valid appeal 1",
+    "checks": {
+      "response is 200 with under_review": true,
+      "appeal entry in log with under_review": true,
+      "original decision unchanged": true
+    },
+    "submit_status": 200,
+    "content_id": "9ef57146-8e4e-4be7-a5db-f2f7584515c3",
+    "appeal_status": 200,
+    "appeal_response": {
+      "content_id": "9ef57146-8e4e-4be7-a5db-f2f7584515c3",
+      "message": "Thanks. Your appeal has been recorded and this item is now under review.",
+      "status": "under_review"
+    },
+    "log_entries": [
+      {
+        "combined_score": 0.3752,
+        "content_id": "9ef57146-8e4e-4be7-a5db-f2f7584515c3",
+        "creator_id": "eval_appeal_1_1",
+        "guess": "human",
+        "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+        "model_score": 0.4623,
+        "status": "decided",
+        "style_score": 0.2882,
+        "timestamp": "2026-11-05T01:36:50+00:00"
+      },
+      {
+        "content_id": "9ef57146-8e4e-4be7-a5db-f2f7584515c3",
+        "creator_id": "eval_appeal_1_1",
+        "event": "appeal",
+        "reasoning": "I wrote this myself.",
+        "status": "under_review",
+        "timestamp": "2026-11-05T01:36:50+00:00"
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "unknown id 1",
+    "content_id": "dbeef0ad-6c10-4e7a-a74f-93c4deab2893",
+    "appeal_status": 404,
+    "appeal_response": {
+      "error": "unknown_content_id",
+      "message": "We couldn't find a submission with that content_id."
+    },
+    "checks": {
+      "returns an error, not a success": true
+    },
+    "passed": true
+  }
+]
+```
+
+Criterion 5, bad input. Produced by `run_eval.py::main`, calling `app.py::submit` (statuses; the error messages come from `app.py::_reject`, shown in the Sample Run above):
+
+```json
+[
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"creator_id\": \"eval_bad_missing\"}"
+  },
+  {
+    "status": 413,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "word word word word word word word word word word word word word word "
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": null, \"creator_id\": \"eval_bad_null\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": \"I went for a long walk by the river this morning and it was lovely and quiet.\"}"
+  }
+]
 ```
 
 **Diagnoses**
