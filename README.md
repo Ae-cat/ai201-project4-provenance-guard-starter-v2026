@@ -357,23 +357,105 @@ The three bad requests above are logged as rejections in `logs/audit.jsonl`:
 
 ## Attack Run — Before
 
-<!-- Every attack with its outcome and a held-or-broke mark.
-     `run_attacks.py --label before` produces the table. -->
+56 attacks run with `python run_attacks.py --set attack_set --label before` (full output in `results/attack_run_2026-11-04_1923_before.md`). No crashes and no 5xx responses. **47 held, 9 broke.**
 
+How I marked them: an evasion attack (AI text altered to look human) held if it was not labelled "human", so "unsure" counts as held. A false-positive attack (real human writing) broke only if it got the AI label. A rejected short text counts as held, because the writer was refused rather than accused. Malformed and flood rows held if the service answered with a clean error and did not crash.
 
+| Family | Attacks | Held | Broke |
+|---|---|---|---|
+| evasion | 10 | 4 | 6 |
+| false_positive | 8 | 7 | 1 |
+| prompt_injection | 6 | 4 | 2 |
+| malformed | 20 | 20 | 0 |
+| flood_same_creator | 12 | 12 | 0 |
+
+| ID | Family | Status | Guess | Score | Verdict | Note |
+|---|---|---|---|---|---|---|
+| EV01 | evasion | 200 | human | 0.164 | BROKE |  |
+| EV02 | evasion | 200 | human | 0.000 | BROKE |  |
+| EV03 | evasion | 200 | human | 0.257 | BROKE |  |
+| EV04 | evasion | 200 | unsure | 0.556 | HELD | unsure, counted as held |
+| EV05 | evasion | 200 | human | 0.180 | BROKE |  |
+| EV06 | evasion | 200 | human | 0.001 | BROKE |  |
+| EV07 | evasion | 200 | unsure | 0.521 | HELD | unsure, counted as held |
+| EV08 | evasion | 400 | — | — | HELD | rejected (under 20 words) |
+| EV09 | evasion | 200 | human | 0.233 | BROKE |  |
+| EV10 | evasion | 200 | unsure | 0.606 | HELD | unsure, counted as held |
+| FP01 | false_positive | 200 | human | 0.295 | HELD |  |
+| FP02 | false_positive | 200 | unsure | 0.647 | HELD | unsure at 0.647, just under the 0.65 AI line |
+| FP03 | false_positive | 200 | human | 0.408 | HELD |  |
+| FP04 | false_positive | 200 | human | 0.368 | HELD |  |
+| FP05 | false_positive | 200 | ai | 0.746 | BROKE | real person's documentation labelled AI |
+| FP06 | false_positive | 200 | human | 0.294 | HELD |  |
+| FP07 | false_positive | 200 | human | 0.300 | HELD |  |
+| FP08 | false_positive | 400 | — | — | HELD | rejected (under 20 words), not accused |
+| PI01 | prompt_injection | 200 | human | 0.037 | BROKE | AI-style text labelled human |
+| PI02 | prompt_injection | 200 | human | 0.126 | BROKE | AI-style text labelled human |
+| PI03 | prompt_injection | 200 | unsure | 0.479 | HELD |  |
+| PI04 | prompt_injection | 200 | human | 0.420 | HELD |  |
+| PI05 | prompt_injection | 200 | unsure | 0.534 | HELD | log not injected; entry holds only my fields |
+| PI06 | prompt_injection | 200 | human | 0.429 | HELD |  |
+| MF01 | malformed | 400 | — | — | HELD |  |
+| MF02 | malformed | 400 | — | — | HELD |  |
+| MF03 | malformed | 400 | — | — | HELD |  |
+| MF04 | malformed | 400 | — | — | HELD |  |
+| MF05 | malformed | 400 | — | — | HELD |  |
+| MF06 | malformed | 400 | — | — | HELD |  |
+| MF07 | malformed | 400 | — | — | HELD |  |
+| MF08 | malformed | 413 | — | — | HELD |  |
+| RQ01 | malformed | 400 | — | — | HELD |  |
+| RQ02 | malformed | 400 | — | — | HELD |  |
+| RQ03 | malformed | 400 | — | — | HELD |  |
+| RQ04 | malformed | 400 | — | — | HELD |  |
+| RQ05 | malformed | 400 | — | — | HELD |  |
+| RQ06 | malformed | 400 | — | — | HELD |  |
+| RQ07 | malformed | 400 | — | — | HELD |  |
+| RQ08 | malformed | 400 | — | — | HELD |  |
+| RQ09 | malformed | 400 | — | — | HELD |  |
+| RQ10 | malformed | 400 | — | — | HELD |  |
+| RQ11 | malformed | 429 | — | — | HELD | 429: bad request counted against the address bucket |
+| RQ12 | malformed | 400 | — | — | HELD |  |
+| FL01_01 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_02 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_03 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_04 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_05 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_06 | flood_same_creator | 400 | — | — | HELD | 400: text under 20 words |
+| FL01_07 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
+| FL01_08 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
+| FL01_09 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
+| FL01_10 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
+| FL01_11 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
+| FL01_12 | flood_same_creator | 429 | — | — | HELD | 429: limiter engaged after 6 |
 
 **Ten audit log entries from the run**
 
-<!-- Choose entries that show the interesting failures, not the ten easiest. -->
+One false positive (`FP05`), a borderline one (`FP02`), five evasions or injections that got through or came close (`EV01`, `EV02`, `EV06`, `PI01`, `PI02`), the log-injection attempt that failed (`PI05`), and two rejections: a `429` from the flood and a short-text `400`.
 
 ```json
-
+{"timestamp": "2026-11-05T00:23:48+00:00", "content_id": "ea11bbf9-2af1-4630-85c8-97e1b4e390c9", "creator_id": "attacker_FP05", "guess": "ai", "model_score": 0.8005, "style_score": 0.6923, "combined_score": 0.7464, "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:47+00:00", "content_id": "de9644a5-ac29-493a-a8ba-2bc2821b8b72", "creator_id": "attacker_FP02", "guess": "unsure", "model_score": 0.7387, "style_score": 0.5561, "combined_score": 0.6474, "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:47+00:00", "content_id": "5077806a-af38-4034-a592-a00156aaca54", "creator_id": "attacker_EV01", "guess": "human", "model_score": 0.1635, "style_score": 0.5, "combined_score": 0.1635, "label": "We think this was probably written by a person. If you know it wasn't, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:47+00:00", "content_id": "25df19a3-f21a-47f6-9908-5f61ec0d94d5", "creator_id": "attacker_EV02", "guess": "human", "model_score": 0.5943, "style_score": 0.0, "combined_score": 0.0, "label": "We think this was probably written by a person. If you know it wasn't, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:47+00:00", "content_id": "b7f9fbd9-d574-4f18-bc3d-c91a9a660f25", "creator_id": "attacker_EV06", "guess": "human", "model_score": 0.5727, "style_score": 0.0014, "combined_score": 0.0014, "label": "We think this was probably written by a person. If you know it wasn't, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:48+00:00", "content_id": "1552178a-1104-42e1-913a-cce739130258", "creator_id": "attacker_PI01", "guess": "human", "model_score": 0.4625, "style_score": 0.0373, "combined_score": 0.0373, "label": "We think this was probably written by a person. If you know it wasn't, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:48+00:00", "content_id": "b56223ad-9e3e-4cd0-a57a-fd5c99afa558", "creator_id": "attacker_PI02", "guess": "human", "model_score": 0.2044, "style_score": 0.0482, "combined_score": 0.1263, "label": "We think this was probably written by a person. If you know it wasn't, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:48+00:00", "content_id": "51e3b9b4-4f3c-4de1-bdd2-eef49553daef", "creator_id": "attacker_PI05", "guess": "unsure", "model_score": 0.6401, "style_score": 0.4286, "combined_score": 0.5343, "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.", "status": "decided"}
+{"timestamp": "2026-11-05T00:23:48+00:00", "creator_id": "attacker_flood", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "6 per 1 minute"}
+{"timestamp": "2026-11-05T00:23:48+00:00", "creator_id": "attacker_FP08", "event": "rejected", "status": "rejected", "reason": "text_too_short"}
 ```
 
-**The single worst outcome** — the one I'd least want to explain to a writer
-whose work got caught by it:
+**The single worst outcome** — the one I'd least want to explain to a writer whose work got caught by it:
 
+`FP05`, a real person's technical documentation:
 
+> To configure the service, edit the settings file in the installation directory. Set the host value to the address the service should bind to. Set the port value to an unused port above 1024. Save the file and restart the service. The service will log its startup configuration. If the port is already in use, the service will exit with an error. Check the log file for details before retrying.
+
+My service labelled it as AI (combined score 0.7464, model signal 0.8005, style signal 0.6923):
+
+> We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.
+
+Both signals leaned AI, so there was no disagreement for my combining rule to catch.
 
 ---
 
