@@ -808,23 +808,25 @@ Criterion 5, bad input. Produced by `run_eval.py::main`, calling `app.py::submit
 ]
 ```
 
+**How I decided each verdict**
+
+1. **MET.** None of my five pieces got the AI label in any of the three trials (0 of 5, against a limit of 2). That target was generous, though: I allowed 2 and got 0, and `FP05` in the attack set shows a real writer's text can still get the AI label. Criterion 1 is the one I'd tighten.
+2. **MISSED.** No pair came anywhere near 0.7 apart. The best was 0.41, and in one pair my own writing scored higher than the AI text.
+3. **MISSED.** All three labels appeared, but only 3 of 5 texts got the label I expected, and I needed 4.
+4. **MET.** 5 of 5 valid appeals passed every check and 5 of 5 unknown ids were refused, in all three trials.
+5. **MET.** All 5 bad inputs returned a 4xx error and none crashed, in all three trials.
+
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+**The combining rule (criteria 2 and 3, and six broken attacks).** Both signals score from 0 to 1, and a lower number means more likely human. My rule in `scoring.py::combine_signals` averages the two, but when they differ by more than 0.30 it uses the *lower* one. So one signal saying "human" overrules the other, even when the other is very sure. The clearest case is the climate AI text: signal one scored it 0.916 (clearly AI) and signal two scored it 0.375, so the combined score was 0.375 and it was labelled human. The same thing happened to `EV01`, `EV02`, `EV03`, `EV06`, `EV09` and `PI01`, all AI-style text that came out as "human", and it pulled `EV10` (signal one 0.979) down to "unsure". It also explains criterion 2: signal two rarely scores clear AI text above about 0.6, so with the lower-score rule even strongly AI text lands near the middle and a 0.7 gap can't happen. The stage is the combining rule. The mechanism is that a gap over 0.30 hands the decision to whichever signal is lower.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+**Signal two (`EV02`, `EV06`, `EV03`, `PI01`).** Breaking AI text into uneven sentences, mixing one very long and one very short sentence, or adding a few short sentences drove the style score to about 0 (`EV02` 0.000, `EV06` 0.001, `PI01` 0.037). Signal two measures only the shape of the text (`stylometry.py::sentence_length_spread` and `style_signal`: how much sentence lengths vary, how varied the vocabulary is, and how much punctuation there is). Changing the shape changes the score without changing who wrote it. The stage is signal two. The mechanism is that sentence-length variation counts as human. The length limits on input (at least 20 words, at most 10,000 characters, in `app.py::submit`) are a different stage and worked as designed: they refused `EV08`, `FP08` and the 60,000-character `MF08`. These attacks were about 90 words, so they never touched that check.
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+**`FP05`, a real person's technical documentation.** Both signals leaned AI (signal one 0.800, signal two 0.692), so the average of 0.746 crossed my 0.65 line and nothing in the combining rule could correct it. Formal instructions follow a fixed format: short imperative sentences of similar length ("Set the host value... Set the port value... Save the file...") with plain, common words. Signal two doesn't check grammar; it saw sentences of even length and scored them as machine-like. Signal one saw predictable common words in short sentences, which gpt2 finds easy to predict. The stage is both signals (`detector.py::model_signal` and `stylometry.py::style_signal`), and the mechanism is a shared blind spot: plain, formatted writing looks like AI to both. My own plain writing shows the same lean, with the Timmy story at 0.61 and the dogs post at 0.58 on the combined score.
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+**The rest.** `EV05` (heavy human editing) and `PI02` (an injected "system message") scored low on both signals, so the combining rule averaged them and this isn't the rule's fault. The odd injected sentence raised signal one's perplexity (0.204 for `PI02`), and my signals don't read the text, so they never obeyed its instructions; they only reacted to how it changed the text.
 
-
+**The pattern.** One stage, the combining rule, accounts for both missed criteria and six of the nine broken attacks. A second, separate problem is that plain or formal human writing looks AI-like to both signals. The first is a design choice I can change; the second is the structural blind spot the project is about.
 
 ---
 
