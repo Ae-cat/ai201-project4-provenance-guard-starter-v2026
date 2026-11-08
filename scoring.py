@@ -52,25 +52,20 @@ def combine_signals(model_score: float, style_score: float) -> float:
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
     """
-    # THE RULE (Milestone 4):
-    #   1. Normally: a weighted average of the two scores, with the weights in
-    #      config.py (WEIGHT_MODEL_SIGNAL, WEIGHT_STYLE_SIGNAL).
-    #   2. But if the signals differ by more than config.DISAGREEMENT_GAP, don't
-    #      average: use the LOWER (more human) of the two.
+    # THE RULE (changed in Unit 8, Milestone 5):
+    #   A weighted average of the two scores, with the weights in config.py
+    #   (WEIGHT_MODEL_SIGNAL, WEIGHT_STYLE_SIGNAL).
     #
-    # Why: a wrongly flagged writer pays more than a missed AI text does, so an
-    # AI-leaning combined score should need BOTH signals to lean that way. One
-    # signal alone saying "AI" is not enough. The cost: when the signals split
-    # on genuinely AI text, it comes out lower and is more likely to land in
-    # "unsure" instead of "AI".
+    # Before: if the signals differed by more than 0.30, this returned the LOWER
+    # (more human) of the two instead of averaging. The Unit 8 attack run showed
+    # that let one low signal overrule the other: six of nine broken attacks, and
+    # both missed criteria, came from it. A very confident model score (0.92 on
+    # the climate AI text) was thrown away because style said 0.38.
     total = config.WEIGHT_MODEL_SIGNAL + config.WEIGHT_STYLE_SIGNAL
     average = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     ) / total
-
-    if abs(model_score - style_score) > config.DISAGREEMENT_GAP:
-        return round(min(model_score, style_score), 4)
     return round(average, 4)
 
 

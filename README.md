@@ -82,7 +82,7 @@ The full endpoint contracts and the false-positive trace are in [design.md](desi
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:** Normally, the combined score is a weighted average of the model score and the style score. But if the two signals differ by more than 0.30, I don't average them. I use the lower (more human) of the two instead. I chose this because a wrongly accused writer pays more than a missed AI text does, so an AI-leaning combined score should need *both* signals to lean that way. The cost is that when the signals split on text that really is AI, it comes out lower and is more likely to land in "unsure" instead of "AI".
+**The rule:** The combined score is a weighted average of the model score and the style score (50% each). I originally had a second part: if the two signals differed by more than 0.30, the rule used the *lower* (more human) of the two instead of averaging, so that an AI label would need both signals to agree. In Unit 8 I removed that part (see "The Improvement" below), because the attack run and my criteria showed it let one low signal overrule the other, and it caused both missed criteria and six of the nine broken attacks. The calibration findings further down describe the original rule.
 
 **The numbers:**
 
@@ -90,7 +90,6 @@ The full endpoint contracts and the false-positive trace are in [design.md](desi
 |---|---|---|
 | Model signal weight | 0.5 | `config.py::WEIGHT_MODEL_SIGNAL` |
 | Style signal weight | 0.5 | `config.py::WEIGHT_STYLE_SIGNAL` |
-| Disagreement gap | 0.30 | `config.py::DISAGREEMENT_GAP` |
 | Style measure weights (spread / vocabulary / punctuation) | 0.5 / 0.3 / 0.2 | `config.py::STYLE_WEIGHT_*` |
 
 The style measures are scaled onto 0–1 with first-guess cut-offs set at the top of `stylometry.py`. They are not calibrated yet.
@@ -102,7 +101,7 @@ The style measures are scaled onto 0–1 with first-guess cut-offs set at the to
 
 **A case where my two signals split, and what my rule does with it:**
 
-My `formal_human` test text (a polite message I wrote myself) scored 0.583 on the model signal, which leans AI, but 0.250 on the style signal, which leans human. That is a gap of 0.333, more than 0.30, so my rule uses the lower score and the combined score is 0.250. A plain average would have given 0.417, so the rule moves a real person's writing further from an AI label. The same rule also pulls clearly-AI text down: my `ai` sample scored 0.834 on the model but only 0.460 on style, so its combined score is 0.460 and it lands in "unsure".
+My `formal_human` test text (a polite message I wrote myself) scored 0.583 on the model signal, which leans AI, but 0.250 on the style signal, which leans human. With the current rule they average to 0.416, which is below my 0.45 line, so it is labelled "human". My original rule would have used the lower score, 0.250, and also labelled it "human". The case that showed the difference was my clearly-AI `ai` sample (0.834 model, 0.460 style): the original rule gave 0.460, and the average gives 0.647, which is just under the 0.65 AI line, so it is "unsure".
 
 ### What my calibration inputs showed
 

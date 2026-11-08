@@ -70,11 +70,6 @@ MAX_APPEAL_CHARS = 2_000   # longest appeal reasoning accepted
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
 
-# If the two signals differ by MORE than this, the combining rule stops
-# averaging and trusts the lower (more human) score. See
-# scoring.py::combine_signals for why.
-DISAGREEMENT_GAP = 0.30
-
 # How much each of the three style measures counts inside the style signal
 # (stylometry.py). They should add up to 1.
 STYLE_WEIGHT_SPREAD = 0.5   # sentence-length spread: the strongest of the three
