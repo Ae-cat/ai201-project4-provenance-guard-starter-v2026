@@ -326,6 +326,20 @@ The three bad requests above are logged as rejections in `logs/audit.jsonl`:
 - *What came back:* Claude said several were vague (what the "5" counted, what "about 0.7" meant, "4 of 5" for a yes/no label check), and that my appeal criterion allowed 2 failures in 5 even though the appeal is plain code, not a guess, and is the only recourse for a wrongly flagged writer.
 - *What I changed:* I kept my numbers for criteria 1, 2, 3 and 5 and reworded them so each says what is counted. I revised criterion 4 to 5 of 5 valid appeals, plus an error for an unknown id. Claude drafted that revised wording at my request, and I kept it.
 
+**Moment 3: finding which stage caused the misses**
+
+- *What I asked for:* after the first attack run and the five-criteria run, I asked Claude to help me work out why criteria 2 and 3 were missed and which stage each broken attack pointed at.
+- *What came back:* Claude read `scoring.py` and my recorded scores and said the lower-of-two combining rule let one low signal overrule the other, which explained both missed criteria and six of the nine broken attacks. It said `FP05` was a different problem: both signals lean AI on plain writing, so no combining rule could fix it.
+- *What I changed:* I wrote the diagnoses in my own words from that and kept `FP05` as a separate blind spot rather than folding it into the rule.
+
+**Moment 4: choosing the one fix**
+
+- *What I asked for:* I asked which single change to make. Claude tested three options on the scores I had already recorded: a plain average, weighting toward the model signal, and lowering the AI line.
+- *What came back:* the plain average cut AI-style attacks labelled "human" from 8 to 6 and left false positives unchanged, while the other two options flagged real writers as AI (1 of 9 rising to 6 of 9, or 4 of 9). Claude warned that the average would also push some texts into "unsure".
+- *What I changed:* I chose the plain average, and my real re-run showed the trade Claude described: 9 broken attacks became 7, and five real-writer texts moved from "human" to "unsure".
+
+**Where AI was wrong or I had to catch it:** my first "after" run happened with the service not running, so every request errored and the appeal check showed 0/5. I deleted those two result files, restarted the server, checked `/health`, and re-ran.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -875,17 +889,21 @@ The cost is that the average pulls extreme scores toward the middle. Five of my 
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+Seven attacks still get through (`EV01`, `EV02`, `EV05`, `EV06`, `PI01`, `PI02`, `FP05`) and two criteria are still missed (2 and 3).
 
+**`EV01`, `EV02`, `EV06`, `PI01` (AI text reshaped to look human).** The style signal still scores these near 0 because uneven sentence lengths count as human. After the average they still land below 0.45. *What I'd do:* make signal two measure something an editor can't change by reshaping sentences, such as word choice or repeated phrasing across the whole text, and stop letting sentence-length spread carry half the style score. *Why I stopped:* that means designing and calibrating a new signal, which is a bigger change than the one fix this unit allowed, and I had no way to check a new signal beyond the same small set of texts I already used.
 
+**`EV05` and `PI02` (heavily edited AI text, and a fake "system message").** Both signals score these low, so no combining rule can recover them; averaging two wrong answers gives a wrong answer. *What I'd do:* nothing in the scoring. Heavily human-edited text is partly human, and I'd rather label it "unsure" through the appeal and a human reviewer than add a rule that guesses. *Why I stopped:* I can't separate "AI text a person rewrote" from "a person's own writing" with these signals, and chasing it would flag more real writers.
+
+**`FP05` (a real person's technical documentation labelled AI).** Both signals lean AI on plain, formatted writing, and my change did not touch this. *What I'd do:* the safest fix is to stop giving the AI label to text that only one kind of evidence supports, for example requiring the AI label to need a high score from signal one and signal two separately. *Why I stopped:* in my own recorded scores that rule would also have lost most of the AI text the system does catch, and I didn't want to trade away detection without testing it. Until then, the appeal is the only recourse, and `FP05` is the reason I kept it as a 5-of-5 criterion.
+
+**Criterion 2 (score spread, still 0 of 5 pairs).** The two signals don't separate AI from human text by 0.7. Averaging can't create separation that isn't in the signals; the best gap is 0.39. *What I'd do:* either find a better second signal or lower the target to something the signals can deliver and say so. *Why I stopped:* lowering the target after seeing the result would be moving the goalposts, so I've left it MISSED.
+
+**Criterion 3 (label coverage, 2 of 5).** My fix moved texts into "unsure", so fewer get the sharp label I expected. This is the direct cost of the plain average, and it is the price I chose to pay for fewer evasion attacks passing. *What I'd do:* re-check whether my expected labels for the middle texts were reasonable. *Why I stopped:* changing the expected labels now would also be moving the goalposts.
 
 **The trade I'd make if this ran for real:**
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
-
-
+I'd lean toward catching more AI text, even though it means more real writers get wrongly flagged. The people who pay are those writers, especially people with plain or formal styles like the author of `FP05`, who would have to appeal and prove they wrote their own work, so the appeal path and the "unsure" label would have to do the protecting.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
