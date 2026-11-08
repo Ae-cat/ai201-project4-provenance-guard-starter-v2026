@@ -831,22 +831,45 @@ Criterion 5, bad input. Produced by `run_eval.py::main`, calling `app.py::submit
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** I replaced the lower-of-two combining rule in `scoring.py::combine_signals` with a plain 0.5/0.5 weighted average of the model signal and the style signal. Before, when the two signals disagreed by more than 0.30, the combined score took the lower one. Nothing else changed: same thresholds (human at or below 0.45, AI at or above 0.65), same signals, same labels.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** The diagnosis of criteria 2 and 3 and of six of the nine broken attacks. In each case one low signal overruled the other. `EV02`, for example, scored 0.0 combined before and 0.2972 after the change, and the criterion 2 and 3 misses had the same cause. I tested three options on the scores I had already recorded (a plain average, weighting toward the model signal, and lowering the AI line). Only the plain average avoided flagging more real writers as AI, so I chose it.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+Same 56 attacks, same attack set, run with `python run_attacks.py --set attack_set --label after`. Full results are in `results/attack_run_2026-11-07_2147_after.md`; the two criteria runs are `results/run_2026-11-07_2147_after.md` and `results/appeal_run_2026-11-07_2147_after.md`.
 
+| Family | Before (held / broke) | After (held / broke) |
+|---|---|---|
+| Evasion | 4 / 6 | 6 / 4 |
+| False positive | 7 / 1 | 7 / 1 |
+| Prompt injection | 4 / 2 | 4 / 2 |
+| Malformed | 20 / 0 | 20 / 0 |
+| Flood, same creator | 12 / 0 | 12 / 0 |
+| **Total** | **47 / 9** | **49 / 7** |
 
+Labels that changed (eight of 56):
 
-**Did it help, and how do I know:**
+| Input | Before | After | Verdict |
+|---|---|---|---|
+| `EV03` | human | unsure | BROKE → HELD |
+| `EV09` | human | unsure | BROKE → HELD |
+| `EV10` | unsure | ai | HELD (now caught outright) |
+| `FP01`, `FP03`, `FP04`, `FP06`, `FP07` | human | unsure | HELD both times |
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+Criteria, before and after (identical across all three trials both times):
 
+| Criterion | Before | After | Verdict after |
+|---|---|---|---|
+| 1. My own writing flagged as AI | 0/5 | 0/5 | MET |
+| 2. Score spread (about 0.7 in 4 of 5 pairs) | 0/5 pairs; best gap 0.41 | 0/5 pairs; best gap 0.39 | MISSED |
+| 3. Label coverage (4 of 5 expected labels, all 3 appear) | 3/5 | 2/5 | MISSED |
+| 4. The appeal path | 5/5 and 5/5 | 5/5 and 5/5 | MET |
+| 5. Bad input | 5/5 | 5/5 | MET |
 
+**Did it help, and how do I know:** A little, and with a cost. Broken attacks went from 9 to 7: `EV03` and `EV09` (AI text with evasion edits) moved from "human" to "unsure", so they no longer pass as human-written, and `EV10` is now labelled AI. No real writer was newly labelled AI: the false-positive scenarios in criterion 1 stayed at 0/5 and `FP05` is still the only false positive in the attack set.
+
+The cost is that the average pulls extreme scores toward the middle. Five of my real-writer texts (`FP01`, `FP03`, `FP04`, `FP06`, `FP07`) moved from "human" to "unsure". They are not accused, but they are no longer cleared either. Criterion 3 also got worse, from 3/5 to 2/5, because texts I expected to be labelled "human" or "ai" now land in "unsure". Criterion 2 is still missed: averaging cannot create separation the signals don't have, and the best gap is still 0.39 against a target of 0.7. So the fix removed the damage caused by the old rule, and it did not make the signals better at telling AI from human writing.
 
 ---
 
