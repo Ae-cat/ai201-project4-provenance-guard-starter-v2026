@@ -941,3 +941,22 @@ I'd lean toward catching more AI text, even though it means more real writers ge
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+<!-- ═══════════════════════ UNIT 9 — CAPSTONE ═══════════════════════ -->
+---
+
+## Capstone
+
+**The System**
+
+Provenance Guard, the Flask AI-text-detection service from units 7 and 8, in the same repository. It scores text with two signals (a local gpt2 model and a stylometry check), labels it, logs every decision to `logs/audit.jsonl`, and takes appeals.
+
+**The Shape**
+
+Shape B, harden against failure. What's new is a catch-all error handler on the service: if anything unexpected goes wrong while handling a request (a crash in scoring, a bad value reaching the model, an error I didn't anticipate), the caller gets a clean JSON error with a status code instead of an HTML error page or a dropped connection, and the failure writes an `error` entry to the audit log with the request's `creator_id`, the error type and how long the request ran. Today the service handles failures I thought of (empty text, too-short text, too-long text, a missing model), but an unexpected crash leaves no record. I'll also add a `duration` field to the log, which this unit requires for every run.
+
+**Out of scope**
+
+- I'm not changing the signals, thresholds or labels. They were tuned in units 7 and 8 and the plain-average combining rule stays as it is.
+- I'm not adding a timeout on scoring or any retry logic. Those are separate pieces of hardening, and I'm only building the catch-all.
+- I'm not adding a front end, a database or hosting. The service runs locally (Path B), because it loads a model locally.
