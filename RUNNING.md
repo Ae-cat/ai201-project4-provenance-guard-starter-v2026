@@ -6,7 +6,7 @@
 
 - **Python 3.11, 3.12 or 3.13.** Not 3.14. This was developed and run on Python 3.13.1 on macOS.
 - **The pinned packages** in `requirements.txt` (flask, flask-limiter, requests, transformers, torch, gunicorn, certifi), installed in a virtual environment.
-  Versions this was run with: Flask 3.1.3, Flask-Limiter 3.12, requests 2.34.2, transformers 4.57.6, torch 2.14.1, gunicorn 23.0.0, certifi 2026.10.23.
+  Versions this was run with: Flask 3.1.3, Flask-Limiter 3.12, requests 2.34.2, transformers 4.57.6, gunicorn 23.0.0, certifi 2026.10.23, and torch 2.14.1 (development machine) or 2.15.0 (clean checkout). Both torch versions worked, because `requirements.txt` allows a range.
 - **The gpt2 model files, about 550 MB.** They download once, the first time the model is used, and are cached on your machine after that. This needs an internet connection the first time only. There is no API key and no account.
 - **Disk and memory:** several GB free for torch and the model, and enough RAM to hold gpt2.
 
@@ -63,6 +63,7 @@ Decision, rejection and error entries carry `timestamp`, `creator_id`, `duration
 
 ## Troubleshooting
 
+- *"Address already in use" / "Port 5000 is in use":* another copy of the service is still running (check your other terminals and stop it with Ctrl+C), or on a Mac the AirPlay Receiver is using port 5000. Either stop that, or start on another port: `PORT=5001 python app.py` (then use port 5001 in every URL).
 - *`ModuleNotFoundError`:* the virtual environment isn't active. Run `source .venv/bin/activate`.
 - *First request hangs or is very slow:* the model is still loading or downloading. Wait, or run `python detector.py` first.
 - *Everything fails with connection errors:* the service isn't running. Check the terminal where you ran `python app.py`.
