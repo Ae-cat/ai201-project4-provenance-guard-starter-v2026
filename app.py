@@ -134,6 +134,15 @@ def _duration_ms() -> float:
     return round((time.perf_counter() - start) * 1000, 1) if start else 0.0
 
 
+def _input_info() -> dict:
+    """What came in, for the log: the first 200 characters and the total length."""
+    payload = request.get_json(silent=True)
+    text = payload.get("text") if isinstance(payload, dict) else None
+    if isinstance(text, str):
+        return {"input_excerpt": text[:200], "input_chars": len(text)}
+    return {"input_excerpt": None, "input_chars": None}
+
+
 @app.errorhandler(Exception)
 def unexpected_error(exc):
     """
@@ -157,6 +166,7 @@ def unexpected_error(exc):
             path=request.path,
             detail=str(exc)[:200],
             duration_ms=_duration_ms(),
+            **_input_info(),
         )
     except Exception as log_exc:  # the log failing must not turn one error into two
         print(f"[error handler] could not write the log: {log_exc!r}", file=sys.stderr)
@@ -301,6 +311,7 @@ def submit():
         label=label,
         status="decided",
         duration_ms=_duration_ms(),
+        **_input_info(),
     )
 
     return jsonify({
@@ -316,7 +327,7 @@ def submit():
 def _reject(creator_id: str, status: int, error: str, message: str, **extra):
     """Refuse a bad request, and leave a trace of it in the log."""
     audit.log_rejection(creator_id=creator_id, reason=error,
-                        duration_ms=_duration_ms(), **extra)
+                        duration_ms=_duration_ms(), **_input_info(), **extra)
     return jsonify({"error": error, "message": message}), status
 
 
