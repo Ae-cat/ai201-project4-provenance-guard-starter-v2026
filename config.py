@@ -127,3 +127,11 @@ RATE_LIMIT_STORAGE = "memory://"
 LOG_DIR = ROOT / "logs"
 AUDIT_LOG = LOG_DIR / "audit.jsonl"
 RESULTS_DIR = ROOT / "results"
+
+
+# ── Capstone: fault injection (for testing the catch-all error handler) ──────
+# Off by default. When on, a submitted text that starts with the marker below
+# raises a deliberate error, so the catch-all handler can be tested on purpose.
+# Never turn this on for anything but a test run.
+FAULT_INJECTION = os.environ.get("AI201_FAULT_INJECTION", "0") == "1"
+FAULT_MARKER = "[[inject-fault]]"

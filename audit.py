@@ -112,6 +112,25 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     })
 
 
+def log_error(creator_id: str, error_type: str, path: str, **extra) -> dict:
+    """
+    Record a request that crashed with something nobody planned for.
+
+    A rejection is a request the service refused on purpose. An error is a
+    request it failed to handle. They get different events so the log can tell
+    "the service said no" from "the service broke".
+    """
+    return _append({
+        "timestamp": _now(),
+        "creator_id": creator_id,
+        "event": "error",
+        "status": "error",
+        "error_type": error_type,
+        "path": path,
+        **extra,
+    })
+
+
 def _append(entry: dict) -> dict:
     config.LOG_DIR.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False)
