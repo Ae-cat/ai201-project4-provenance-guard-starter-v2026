@@ -24,9 +24,12 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import sys
+import time
 import uuid
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 import audit
 import config
@@ -116,6 +119,52 @@ if config.RATE_LIMITING_ENABLED:
             "message": "Too many submissions. Try again shortly.",
             "limit": str(exc.description),
         }), 429
+
+
+# ── Capstone: timing, and the catch-all error handler ────────────────────────
+
+@app.before_request
+def _start_timer():
+    """Note when the request started, so every log entry can say how long it took."""
+    g.start = time.perf_counter()
+
+
+def _duration_ms() -> float:
+    start = g.get("start")
+    return round((time.perf_counter() - start) * 1000, 1) if start else 0.0
+
+
+@app.errorhandler(Exception)
+def unexpected_error(exc):
+    """
+    Anything nobody planned for ends up here: a JSON error and a log entry,
+    never an HTML error page and never a silent failure.
+
+    HTTP errors Flask raises itself (404, 405, and the 429 handled above) pass
+    through unchanged. They are not crashes.
+    """
+    if isinstance(exc, HTTPException):
+        return exc
+
+    payload = request.get_json(silent=True)
+    creator = payload.get("creator_id") if isinstance(payload, dict) else None
+    who = creator if isinstance(creator, str) and creator.strip() else "unknown"
+
+    try:
+        audit.log_error(
+            creator_id=who,
+            error_type=type(exc).__name__,
+            path=request.path,
+            detail=str(exc)[:200],
+            duration_ms=_duration_ms(),
+        )
+    except Exception as log_exc:  # the log failing must not turn one error into two
+        print(f"[error handler] could not write the log: {log_exc!r}", file=sys.stderr)
+
+    return jsonify({
+        "error": "internal_error",
+        "message": "Something went wrong on our side. Nothing was decided. Please try again.",
+    }), 500
 
 
 # ── The worked example. Already works. Don't edit. ────────────────────────────
@@ -226,6 +275,9 @@ def submit():
         return _reject(who, 400, "text_too_short",
                        f"Please provide at least {config.MIN_WORDS} words.")
 
+    if config.FAULT_INJECTION and text.startswith(config.FAULT_MARKER):
+        raise RuntimeError("deliberate test fault")  # capstone: tests the catch-all
+
     # ── Signals (Milestones 3 and 4), then the combining rule, then the label. ───────────────────────────────────────────────
     try:
         model_score = detector.model_signal(text)
@@ -248,6 +300,7 @@ def submit():
         combined_score=combined_score,
         label=label,
         status="decided",
+        duration_ms=_duration_ms(),
     )
 
     return jsonify({
@@ -262,7 +315,8 @@ def submit():
 
 def _reject(creator_id: str, status: int, error: str, message: str, **extra):
     """Refuse a bad request, and leave a trace of it in the log."""
-    audit.log_rejection(creator_id=creator_id, reason=error, **extra)
+    audit.log_rejection(creator_id=creator_id, reason=error,
+                        duration_ms=_duration_ms(), **extra)
     return jsonify({"error": error, "message": message}), status
 
 
