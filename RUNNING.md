@@ -6,6 +6,7 @@
 
 - **Python 3.11, 3.12 or 3.13.** Not 3.14. This was developed and run on Python 3.13.1 on macOS.
 - **The pinned packages** in `requirements.txt` (flask, flask-limiter, requests, transformers, torch, gunicorn, certifi), installed in a virtual environment.
+  Versions this was run with: Flask 3.1.3, Flask-Limiter 3.12, requests 2.34.2, transformers 4.57.6, torch 2.14.1, gunicorn 23.0.0, certifi 2026.10.23.
 - **The gpt2 model files, about 550 MB.** They download once, the first time the model is used, and are cached on your machine after that. This needs an internet connection the first time only. There is no API key and no account.
 - **Disk and memory:** several GB free for torch and the model, and enough RAM to hold gpt2.
 

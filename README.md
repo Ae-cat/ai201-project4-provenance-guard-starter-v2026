@@ -960,3 +960,224 @@ Shape B, harden against failure. What's new is a catch-all error handler on the 
 - I'm not changing the signals, thresholds or labels. They were tuned in units 7 and 8 and the plain-average combining rule stays as it is.
 - I'm not adding a timeout on scoring or any retry logic. Those are separate pieces of hardening, and I'm only building the catch-all.
 - I'm not adding a front end, a database or hosting. The service runs locally (Path B), because it loads a model locally.
+
+**Run path**
+
+Path B, local with logs. The service starts with `python app.py` and everything needed to reproduce it (Python 3.11 to 3.13, pinned packages, the 550 MB gpt2 model) is in [RUNNING.md](RUNNING.md). I'm not hosting it because signal one loads a model locally, which doesn't fit the free host's 512 MB.
+
+**Instrumentation**
+
+Every request writes one JSON line to `logs/audit.jsonl` (`audit.py`, called from `app.py`). Decisions, rejected inputs, appeals and unexpected errors each have their own `event`/`status`. This unit I added `duration_ms` (how long the service spent on the request, timed in `app.py` with a `before_request` hook) and `input_excerpt` / `input_chars` (the first 200 characters of the text and its full length) to decisions, rejections and errors, so a log line says what came in, what came out and how long it took.
+
+Ten decisions from the cost measurement (`python measure_cost.py`, creator ids `cost_run_1` to `cost_run_10`), copied from the log:
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:11+00:00",
+  "content_id": "7674399c-37bc-453a-8910-d8dea74355b0",
+  "creator_id": "cost_run_1",
+  "guess": "human",
+  "model_score": 0.5826,
+  "style_score": 0.25,
+  "combined_score": 0.4163,
+  "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+  "status": "decided",
+  "duration_ms": 48.7,
+  "input_excerpt": "I would like to attend my family's dinner this evening so I will not be able to join you for the office party event",
+  "input_chars": 115
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:11+00:00",
+  "content_id": "91975e68-08bc-45df-9fa9-8ca088cf42fa",
+  "creator_id": "cost_run_2",
+  "guess": "unsure",
+  "model_score": 0.4896,
+  "style_score": 0.52,
+  "combined_score": 0.5048,
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "status": "decided",
+  "duration_ms": 51.7,
+  "input_excerpt": "Later today there is going to be a firework show, with vendors and such near by. My friends are going to come with me we are a group of 5.",
+  "input_chars": 138
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:11+00:00",
+  "content_id": "e858ccb3-f9a1-43f6-ae64-236cbdcb7b10",
+  "creator_id": "cost_run_3",
+  "guess": "unsure",
+  "model_score": 0.6202,
+  "style_score": 0.6094,
+  "combined_score": 0.6148,
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "status": "decided",
+  "duration_ms": 68.1,
+  "input_excerpt": "Timmy went out to the grocery at 3pm, he has yet to arrive back home. The time is currently 4:30pm, perhaps there is traffic. Timmy is going to buy milk, eggs, cookie batter, and butter so we can make",
+  "input_chars": 283
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:11+00:00",
+  "content_id": "2ab2182f-984c-4435-bcbb-41de6d3f4631",
+  "creator_id": "cost_run_4",
+  "guess": "human",
+  "model_score": 0.3906,
+  "style_score": 0.1664,
+  "combined_score": 0.2785,
+  "label": "We think this was probably written by a person. If you know it wasn't, please let us know.",
+  "status": "decided",
+  "duration_ms": 77.9,
+  "input_excerpt": "The bell rang! It is P.E time and all the kids went running. Today was the third versus fourth grade dodgeball competition. All the kids stretched and got ready for the match. Swish! The first through",
+  "input_chars": 519
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "eae84e97-4d2f-4673-a5c1-14c1424bdf59",
+  "creator_id": "cost_run_5",
+  "guess": "unsure",
+  "model_score": 0.5693,
+  "style_score": 0.5951,
+  "combined_score": 0.5822,
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "status": "decided",
+  "duration_ms": 66.4,
+  "input_excerpt": "Scrolling through instagram, I have recently learned that dogs such as Chihuahuas take long naps throughout the day but automatically start barking once a guest appears at the door. The dog sleeps thr",
+  "input_chars": 498
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "3894f31c-1856-48ca-af62-c801e0a74a29",
+  "creator_id": "cost_run_6",
+  "guess": "ai",
+  "model_score": 0.7804,
+  "style_score": 0.5392,
+  "combined_score": 0.6598,
+  "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+  "status": "decided",
+  "duration_ms": 62.3,
+  "input_excerpt": "Effective time management is a crucial skill that can greatly enhance both personal and professional success. By prioritizing tasks, setting clear goals, and minimizing distractions, individuals can i",
+  "input_chars": 464
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "7bade747-3296-4544-a602-b362fbe685e3",
+  "creator_id": "cost_run_7",
+  "guess": "ai",
+  "model_score": 0.8818,
+  "style_score": 0.5256,
+  "combined_score": 0.7037,
+  "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+  "status": "decided",
+  "duration_ms": 58.4,
+  "input_excerpt": "Regular physical exercise offers numerous benefits for overall health and well-being. It strengthens the cardiovascular system, improves mood, and boosts energy levels. Additionally, consistent activi",
+  "input_chars": 486
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "c4f77340-3361-40ce-a0af-2b77088ce402",
+  "creator_id": "cost_run_8",
+  "guess": "unsure",
+  "model_score": 0.9163,
+  "style_score": 0.3753,
+  "combined_score": 0.6458,
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "status": "decided",
+  "duration_ms": 55.9,
+  "input_excerpt": "Climate change is one of the most pressing challenges facing humanity today. Rising global temperatures contribute to extreme weather events, sea level rise, and disruptions to ecosystems. Addressing ",
+  "input_chars": 466
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "d9138647-37de-4856-b2d5-5ee68107ed5e",
+  "creator_id": "cost_run_9",
+  "guess": "ai",
+  "model_score": 0.7907,
+  "style_score": 0.5453,
+  "combined_score": 0.668,
+  "label": "We think this was probably written by AI, because its sentence structure looks like AI writing. If that's wrong, you can appeal.",
+  "status": "decided",
+  "duration_ms": 53.4,
+  "input_excerpt": "Reading is a fundamental activity that enriches the mind and expands our understanding of the world. Through books, individuals can explore diverse perspectives, acquire new knowledge, and develop cri",
+  "input_chars": 459
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-14T01:51:12+00:00",
+  "content_id": "b3634eed-e7cc-4599-944d-492a2e5d41b8",
+  "creator_id": "cost_run_10",
+  "guess": "unsure",
+  "model_score": 0.7193,
+  "style_score": 0.5194,
+  "combined_score": 0.6194,
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "status": "decided",
+  "duration_ms": 53.9,
+  "input_excerpt": "Technology has transformed the way people communicate, work, and learn in the modern world. Digital tools enable instant connection across great distances and provide access to vast amounts of informa",
+  "input_chars": 448
+}
+```
+
+Two failed requests from `python check_error_handler.py`, run with `AI201_FAULT_INJECTION=1`. The first is a rejected input, the second is a deliberate crash caught by the new catch-all handler. These two ran before I added the input fields, so they carry `duration_ms` but not `input_excerpt`:
+
+```json
+{
+  "timestamp": "2026-11-13T23:56:38+00:00",
+  "creator_id": "capstone_check",
+  "event": "rejected",
+  "status": "rejected",
+  "reason": "empty_text",
+  "duration_ms": 0.2
+}
+```
+
+```json
+{
+  "timestamp": "2026-11-13T23:56:38+00:00",
+  "creator_id": "capstone_check",
+  "event": "error",
+  "status": "error",
+  "error_type": "RuntimeError",
+  "path": "/submit",
+  "detail": "deliberate test fault",
+  "duration_ms": 0.1
+}
+```
+
+**What It Costs**
+
+The cost of one run on this service is seconds of compute: nothing is paid for, because the model runs on my laptop (no API, no tokens, no spend).
+
+*How I measured it.* `measure_cost.py` sends one warm-up request (the first request loads the model, so it is reported separately), then 10 submissions with 10 different texts, each under its own `creator_id`. For each it reads `duration_ms` from the audit log, which is the service's own timing, and also times the call from the caller's side.
+
+| Measure | Result |
+|---|---|
+| Server time per run, mean of 10 | 59.7 ms (0.06 s) |
+| Server time per run, min / max | 48.7 ms / 77.9 ms |
+| Caller wait per run, mean | 0.06 s |
+| One-time model load (first request after start) | 4.99 s |
+
+*For a hundred people a day.* If each of 100 people submits 5 texts a day (my assumption, not a measurement), that is 100 × 5 = 500 runs, and 500 × 0.06 s = 30 seconds of compute a day, plus the one-time 5-second model load each time the service starts. That is a tiny load; the service would be limited by the rate limits I set (6 per minute and 150 per day per creator) long before compute.
