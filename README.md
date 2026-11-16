@@ -1186,7 +1186,7 @@ The cost of one run on this service is seconds of compute: nothing is paid for, 
 
 **Criteria**
 
-The five capstone criteria are in [criteria.md](criteria.md), under "Capstone acceptance criteria". They were committed (`add capstone criteria`) before any capstone results existed.
+The five capstone criteria are in [criteria.md](criteria.md), under "Capstone acceptance criteria". They were committed (`add capstone criteria`) before any capstone results existed. After the runs I added a "how to run it" line under each criterion, because the original wording didn't say how to trigger a crash or make the log unwritable; no target or original sentence was changed, and the criteria file says so.
 
 **Run Log and Verdicts**
 
@@ -1233,7 +1233,7 @@ status 500
 entries without it: [('rejected', 'rate_limited')]
 ```
 
-**Criterion 4**, one normal submission, then the three error-code checks:
+**Criterion 4** (`app.py::submit` for the normal submission and the 400 and 413 checks, `app.py::rate_limited` for the 429, `app.py::ping` for `/ping`), one normal submission, then the three error-code checks:
 ```
 status 200
 {

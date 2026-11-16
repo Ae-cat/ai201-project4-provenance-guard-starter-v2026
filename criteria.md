@@ -125,11 +125,15 @@ Of 10 deliberately triggered crashes on `/submit`, at least 9 return HTTP 500 wi
 
 *Why:* a caller needs a consistent, structured answer when something unexpected fails, and a stack trace would show the service's internals to a stranger.
 
+*How to run it (added after the runs; no target was changed).* Start the service with `AI201_FAULT_INJECTION=1 python app.py`. Send 10 `POST /submit` requests, each with its own `creator_id` and a `text` that begins with `[[inject-fault]]` (the test switch raises a deliberate error). For each response, check that the status is 500, that the body parses as JSON with both `error` and `message`, and that the body text contains none of "Traceback", ".py" or a file path.
+
 ## 2. Crash logging
 
 Of those same 10 crashes, 10 produce an `error` entry in the audit log with `error_type`, `duration_ms` and `creator_id`.
 
 *Why:* a failure that leaves no record is one nobody investigates.
+
+*How to run it (added after the runs; no target was changed).* Read `logs/audit.jsonl` (or `GET /log`). For each of the 10 `creator_id`s used in criterion 1, find an entry whose `event` is `error`, and check that `error_type`, `duration_ms` and `creator_id` are all present and not empty.
 
 ## 3. Duration tracking
 
@@ -137,14 +141,22 @@ At least 95% of the decision, rejection and error entries written during the tes
 
 *Why:* timing is only useful if it is recorded on every outcome, not just on successful submissions.
 
+*How to run it (added after the runs; no target was changed).* After the test traffic, take every entry in `logs/audit.jsonl` written during the run whose `event` is missing (a decision), `rejected` or `error` (appeals are not counted). Divide the number that have a numeric `duration_ms` by the total.
+
 ## 4. Original endpoints preserved
 
 All 23 of these checks pass: 10 normal `/submit` requests return 200 with all six fields (`content_id`, `guess`, `confidence`, `label`, `model_score`, `style_score`); 10 `/ping` requests return 200; one empty-text request returns 400; one over-length request returns 413; and the 7th request within a minute from one `creator_id` returns 429. None of them returns 500.
 
 *Why:* the catch-all must not swallow errors the service already handled on purpose.
 
+*How to run it (added after the runs; no target was changed).* With the service running, send: 10 `POST /submit` requests with a valid text of at least 20 words (each must return 200 with all six fields); 10 `POST /ping` requests with `{"message": "hello"}` (each must return 200); one `POST /submit` with empty text (must return 400); one `POST /submit` with about 12,500 characters (must return 413); and 7 `POST /submit` requests in under a minute from the same `creator_id` (the 7th must return 429). That is 23 checks, and none may return 500.
+
 ## 5. Crash handling when the log can't be written
 
 With the audit log made unwritable (`chmod 444 logs/audit.jsonl`), 5 of 5 requests that would crash still return a JSON 500 with `error` and `message`, with no HTML error page and no hang.
 
 *Why:* a logging failure is the one failure the service can't record, and the caller should still get an answer.
+
+*How to run it (added after the runs; no target was changed).* Run `chmod 444 logs/audit.jsonl` so the log can't be written. Send 5 fault-injected requests as in criterion 1, with a client timeout of 10 seconds. Each must return a 500 with a JSON body containing `error` and `message` inside that timeout. Then restore the log with `chmod 644 logs/audit.jsonl`.
+
+> **Note on the "how to run it" lines.** I added them after the first runs because the original wording said "deliberately triggered crash" and "the log made unwritable" without saying how a reader would do that. The targets and the original sentences above are unchanged. These lines are the steps my `run_capstone_eval.py` already performed.
