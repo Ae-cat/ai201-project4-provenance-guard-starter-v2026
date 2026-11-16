@@ -1181,3 +1181,71 @@ The cost of one run on this service is seconds of compute: nothing is paid for, 
 | One-time model load (first request after start) | 4.99 s |
 
 *For a hundred people a day.* If each of 100 people submits 5 texts a day (my assumption, not a measurement), that is 100 × 5 = 500 runs, and 500 × 0.06 s = 30 seconds of compute a day, plus the one-time 5-second model load each time the service starts. That is a tiny load; the service would be limited by the rate limits I set (6 per minute and 150 per day per creator) long before compute.
+
+**Criteria**
+
+The five capstone criteria are in [criteria.md](criteria.md), under "Capstone acceptance criteria". They were committed (`add capstone criteria`) before any capstone results existed.
+
+**Run Log and Verdicts**
+
+Before the fix, three trials, nothing changed in between (`python run_capstone_eval.py --label before`, full output in `results/capstone_run_2026-11-16_0001_before.md`):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Crash response | at least 9 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| 2. Crash logging | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| 3. Duration tracking | at least 95% | 97% (28/29) | 97% (28/29) | 97% (28/29) | MET |
+| 4. Original endpoints preserved | 23 of 23 | 23/23 | 23/23 | 23/23 | MET |
+| 5. Crash handling, log unwritable | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+
+All three trials came out identical, which is expected: nothing here is random, and the crash is a deliberate fault. Real output from trial 1 is in the results file: the 500 response body (`app.py::unexpected_error`), the `error` log entry with `error_type`, `duration_ms` and `creator_id` (`audit.py::log_error`), the 23 checks on the original endpoints, and the 429 check (seven requests from one creator gave `[200, 200, 200, 200, 200, 200, 429]`).
+
+*A run that didn't count.* My first attempt at this run was invalid. The service was running from my clean-checkout copy of the repo, so it wrote its log in the wrong folder, and the script read an empty log (criteria 2 and 3 showed 0, and criterion 5 passed against the wrong log). I deleted that result file and added a check to `run_capstone_eval.py` that stops if the service isn't logging to this repository.
+
+**Diagnosis**
+
+I met all five, so there are no misses to diagnose. There is one defect hiding behind a pass, and my target was too loose to catch it.
+
+Criterion 3 was met at 97%, but the one entry without `duration_ms` in every trial was the rate-limit rejection (`reason: rate_limited`). The stage is the 429 handler, `app.py::rate_limited`. The mechanism is that it writes its log entry directly with `audit.log_rejection(...)` instead of going through `_reject`, so it never got the duration field the other rejections have. My test sends only one 429 in 29 entries, so 97% looked fine. In a real flood, most rejections would be 429s and nearly all of them would be missing the field.
+
+*Were my targets set low?* Yes. Criterion 3 is the one I'd tighten, from at least 95% to 100% of rejections, because a rate-limited request is exactly the kind of event I'd want timed. Criterion 1 at 9 of 10 is also looser than the handler needs, since the injected crash is deterministic. And criteria 1, 2 and 4 are all easy to meet against a staged fault, so only criterion 5, which tests a failure I didn't stage, was a real test of the extension.
+
+**The Improvement**
+
+*What I changed:* one fix in `app.py`. The 429 handler now passes `duration_ms` to the log, and I moved the timer hook so it is registered before the rate limiter. The second part mattered, and I only found it while making the fix. Flask runs `before_request` hooks in the order they were added, and the limiter's hook runs before mine, so a rate-limited request was rejected before the timer ever started. Logging a duration there without moving the timer would have written a meaningless 0.0.
+
+*Which diagnosis pointed at it:* the missing `duration_ms` on `rate_limited` rejections, in `app.py::rate_limited`.
+
+Before and after, same script, same targets (`results/capstone_run_2026-11-16_0012_after.md`):
+
+| Criterion | Before (runs 1/2/3) | After (runs 1/2/3) |
+|---|---|---|
+| 1. Crash response (at least 9 of 10) | 10, 10, 10 | 10, 10, 10 |
+| 2. Crash logging (10 of 10) | 10, 10, 10 | 10, 10, 10 |
+| 3. Duration tracking (at least 95%) | 97% (28/29) in all three | 100% (29/29) in all three |
+| 4. Original endpoints preserved (23 of 23) | 23, 23, 23 | 23, 23, 23 |
+| 5. Crash handling, log unwritable (5 of 5) | 5, 5, 5 | 5, 5, 5 |
+
+*Did it help, and how do I know:* Yes, narrowly. Criterion 3 went from 28 of 29 to 29 of 29 in every trial, and the after-run's own sample shows `entries without it: none`. A 429 entry from the after-run reads `{"creator_id": "cap_t3_rate", "event": "rejected", "reason": "rate_limited", "limit": "6 per 1 minute", "duration_ms": 0.2}`. The other four criteria did not change, so I found no sign of a regression, and criterion 4 (the 23 checks on the original endpoints) still passed. The limit of this result is that it was a pass in both runs, so the improvement is visible only in the percentage, and the 0.2 ms is a time-to-reject, not a processing time.
+
+**What's Still Broken**
+
+No criterion is missed. These are the gaps I know about:
+
+- *Appeal log entries have no `duration_ms`.* `audit.log_appeal` doesn't take it, and criterion 3 didn't cover appeals. *What I'd do:* pass the duration through like the other entries. *Why I stopped:* it was a separate change from the one fix I picked.
+- *A crash on `/appeal` is untested.* My fault switch only exists on `/submit`; I chose the log-unwritable criterion over an `/appeal` one. *What I'd do:* add the same hook to `/appeal` and a criterion for it. *Why I stopped:* the hook is more code and I had one extension to build.
+- *The handler lets Flask's own HTTP errors through unchanged.* A 404 or 405 still returns Flask's HTML page, not JSON, and isn't logged. *What I'd do:* return JSON and log those too. *Why I stopped:* they aren't crashes, so I left them out of scope.
+- *When the log can't be written, the only trace is a line on stderr.* The caller still gets a JSON 500 (criterion 5), but nobody sees the failure unless they are watching the terminal. *What I'd do:* count log-write failures and show them on `/health`. *Why I stopped:* it was beyond the extension I scoped.
+- *The fault-injection switch is test code inside the service.* It is off by default and needs `AI201_FAULT_INJECTION=1`, but it is still there. *What I'd do:* move it into a test-only module. *Why I stopped:* I needed it to run the crash tests.
+
+*What I'd do next:* the first thing I'd do is count and surface log-write failures on `/health`, because a service that can't write its log currently fails quietly to everyone except the person watching the terminal, and every other criterion depends on that log.
+
+**How I Used AI**
+
+*Checking my criteria.* I wrote five criteria and asked Claude to check them against the self-check. It said criterion 4 bundled several checks into a vague "original response structure", that criterion 5 couldn't be tested because `/appeal` had no fault hook, and that criteria 1, 2 and 5 all tested the same staged crash. I kept my targets, chose the log-unwritable criterion instead of the `/appeal` one, and kept 9 of 10 for criterion 1. Claude then drafted the tightened wording at my request, and I committed it.
+
+*Building and running the test.* Claude wrote the error handler, the `duration_ms` field, the cost script and the criteria runner, and I ran everything and pasted the output back. When my first run came back with zeros, Claude worked out from the file's timestamps that the service was logging to a different folder, and I restarted it from the right one.
+
+*Finding the fix.* Claude pointed out that the one entry missing `duration_ms` was the 429, and that adding the field alone would log a meaningless 0.0 because the limiter runs before my timer. I kept the fix to that one change.
+
+*Where I had to catch it.* Claude's instructions twice contained a literal `<your repo URL>` and `<the PID shown>` that I typed as-is, and I mistyped `origin` once, so none of my commits were pushed until I noticed.
