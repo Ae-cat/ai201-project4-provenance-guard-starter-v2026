@@ -40,6 +40,23 @@ import stylometry
 app = Flask(__name__)
 
 
+# ── Capstone: timing ─────────────────────────────────────────────────────────
+# Registered before the rate limiter on purpose. Flask runs before_request hooks
+# in the order they were added, and the limiter's check can reject a request
+# (429) before any later hook runs. Starting the timer first means even a
+# rate-limited request has a start time to measure from.
+
+@app.before_request
+def _start_timer():
+    """Note when the request started, so every log entry can say how long it took."""
+    g.start = time.perf_counter()
+
+
+def _duration_ms() -> float:
+    start = g.get("start")
+    return round((time.perf_counter() - start) * 1000, 1) if start else 0.0
+
+
 # ── Rate limiting — UNIT 8 ────────────────────────────────────────────────────
 # Off until you turn it on. In unit 8, Milestone 1:
 #
@@ -113,6 +130,7 @@ if config.RATE_LIMITING_ENABLED:
             creator_id=payload.get("creator_id", "unknown"),
             reason="rate_limited",
             limit=str(exc.description),
+            duration_ms=_duration_ms(),
         )
         return jsonify({
             "error": "rate_limited",
@@ -122,17 +140,6 @@ if config.RATE_LIMITING_ENABLED:
 
 
 # ── Capstone: timing, and the catch-all error handler ────────────────────────
-
-@app.before_request
-def _start_timer():
-    """Note when the request started, so every log entry can say how long it took."""
-    g.start = time.perf_counter()
-
-
-def _duration_ms() -> float:
-    start = g.get("start")
-    return round((time.perf_counter() - start) * 1000, 1) if start else 0.0
-
 
 def _input_info() -> dict:
     """What came in, for the log: the first 200 characters and the total length."""
