@@ -947,9 +947,11 @@ I'd lean toward catching more AI text, even though it means more real writers ge
 
 ## Capstone
 
-**The System**
+**What This Extends**
 
-Provenance Guard, the Flask AI-text-detection service from units 7 and 8, in the same repository. It scores text with two signals (a local gpt2 model and a stylometry check), labels it, logs every decision to `logs/audit.jsonl`, and takes appeals.
+Provenance Guard (the Flask AI-text-detection service from units 7 and 8), the same repository and system, not a new one. It scores text with two signals (a local gpt2 model and a stylometry check), labels it, logs every decision to `logs/audit.jsonl`, and takes appeals.
+
+*What is new:* a catch-all error handler (an unexpected crash returns clean JSON and leaves an `error` entry in the log), a `duration_ms` field on every log entry, an `input_excerpt` and `input_chars` on decisions, rejections and errors, and a run path (`RUNNING.md`) with a cost measurement.
 
 **The Shape**
 
@@ -961,7 +963,7 @@ Shape B, harden against failure. What's new is a catch-all error handler on the 
 - I'm not adding a timeout on scoring or any retry logic. Those are separate pieces of hardening, and I'm only building the catch-all.
 - I'm not adding a front end, a database or hosting. The service runs locally (Path B), because it loads a model locally.
 
-**Run path**
+**Running It**
 
 Path B, local with logs. The service starts with `python app.py` and everything needed to reproduce it (Python 3.11 to 3.13, pinned packages, the 550 MB gpt2 model) is in [RUNNING.md](RUNNING.md). I'm not hosting it because signal one loads a model locally, which doesn't fit the free host's 512 MB.
 
@@ -1198,7 +1200,71 @@ Before the fix, three trials, nothing changed in between (`python run_capstone_e
 | 4. Original endpoints preserved | 23 of 23 | 23/23 | 23/23 | 23/23 | MET |
 | 5. Crash handling, log unwritable | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 
-All three trials came out identical, which is expected: nothing here is random, and the crash is a deliberate fault. Real output from trial 1 is in the results file: the 500 response body (`app.py::unexpected_error`), the `error` log entry with `error_type`, `duration_ms` and `creator_id` (`audit.py::log_error`), the 23 checks on the original endpoints, and the 429 check (seven requests from one creator gave `[200, 200, 200, 200, 200, 200, 429]`).
+All three trials came out identical, which is expected: nothing here is random, and the crash is a deliberate fault. Real output from trial 1 of that run, pasted from the results file:
+
+**Criterion 1** (`app.py::unexpected_error`), first crash response:
+```
+status 500
+{
+  "error": "internal_error",
+  "message": "Something went wrong on our side. Nothing was decided. Please try again."
+}
+```
+
+**Criterion 2** (`audit.py::log_error`), the log entry for that crash:
+```json
+{
+  "timestamp": "2026-11-16T05:00:59+00:00",
+  "creator_id": "cap_t1_crash_1",
+  "event": "error",
+  "status": "error",
+  "error_type": "RuntimeError",
+  "path": "/submit",
+  "detail": "deliberate test fault",
+  "duration_ms": 0.3,
+  "input_excerpt": "[[inject-fault]] I went for a long walk by the river this morning and it was lovely and quiet, so I stopped at the little cafe near the bridge and had a coffee before heading home.",
+  "input_chars": 180
+}
+```
+
+**Criterion 3** (`app.py::_duration_ms`, passed into `audit.py`):
+```
+28 of 29 entries had a numeric duration_ms
+entries without it: [('rejected', 'rate_limited')]
+```
+
+**Criterion 4**, one normal submission, then the three error-code checks:
+```
+status 200
+{
+  "confidence": 0.5643,
+  "content_id": "4a7ef43a-0737-4291-9799-022ddc80a27d",
+  "guess": "unsure",
+  "label": "We can't tell whether a person or AI wrote this, or whether AI helped. If you wrote it yourself, please let us know.",
+  "model_score": 0.8467,
+  "style_score": 0.2818
+}
+
+400 check: status 400 {
+  "error": "empty_text",
+  "message": "Please provide text input."
+}
+413 check: status 413 {
+  "error": "text_too_long",
+  "message": "Text is over 10000 characters."
+}
+429 check: seven requests from one creator gave [200, 200, 200, 200, 200, 200, 429]
+```
+
+**Criterion 5** (`app.py::unexpected_error` with the log unwritable), first response:
+```
+status 500
+{
+  "error": "internal_error",
+  "message": "Something went wrong on our side. Nothing was decided. Please try again."
+}
+```
+
 
 *A run that didn't count.* My first attempt at this run was invalid. The service was running from my clean-checkout copy of the repo, so it wrote its log in the wrong folder, and the script read an empty log (criteria 2 and 3 showed 0, and criterion 5 passed against the wrong log). I deleted that result file and added a check to `run_capstone_eval.py` that stops if the service isn't logging to this repository.
 
@@ -1216,7 +1282,24 @@ Criterion 3 was met at 97%, but the one entry without `duration_ms` in every tri
 
 *Which diagnosis pointed at it:* the missing `duration_ms` on `rate_limited` rejections, in `app.py::rate_limited`.
 
-Before and after, same script, same targets (`results/capstone_run_2026-11-16_0012_after.md`):
+After the fix, three trials, same script, same targets and the same table format (`python run_capstone_eval.py --label after`, full output in `results/capstone_run_2026-11-16_0012_after.md`):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Crash response | at least 9 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| 2. Crash logging | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| 3. Duration tracking | at least 95% | 100% (29/29) | 100% (29/29) | 100% (29/29) | MET |
+| 4. Original endpoints preserved | 23 of 23 | 23/23 | 23/23 | 23/23 | MET |
+| 5. Crash handling, log unwritable | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+
+The criterion 3 sample from the after run (`app.py::_duration_ms`, passed into `audit.py`):
+
+```
+29 of 29 entries had a numeric duration_ms
+entries without it: none
+```
+
+Before and after side by side:
 
 | Criterion | Before (runs 1/2/3) | After (runs 1/2/3) |
 |---|---|---|
@@ -1238,7 +1321,7 @@ No criterion is missed. These are the gaps I know about:
 - *When the log can't be written, the only trace is a line on stderr.* The caller still gets a JSON 500 (criterion 5), but nobody sees the failure unless they are watching the terminal. *What I'd do:* count log-write failures and show them on `/health`. *Why I stopped:* it was beyond the extension I scoped.
 - *The fault-injection switch is test code inside the service.* It is off by default and needs `AI201_FAULT_INJECTION=1`, but it is still there. *What I'd do:* move it into a test-only module. *Why I stopped:* I needed it to run the crash tests.
 
-*What I'd do next:* the first thing I'd do is count and surface log-write failures on `/health`, because a service that can't write its log currently fails quietly to everyone except the person watching the terminal, and every other criterion depends on that log.
+*What I'd do next:* the first thing I'd do is count and surface log-write failures on `/health`, because a service that can't write its log currently fails quietly to everyone except the person watching the terminal, and every other criterion depends on that log. I'd do it before the `/appeal` crash hook or the JSON 404s, because those add coverage, while this one protects the record every other check relies on.
 
 **How I Used AI**
 
