@@ -158,7 +158,12 @@ def main():
         sys.exit(f"No audit log at {LOG}. Run this from the repository the service is running in.")
 
     print("Warm-up (loads the model; not counted)...")
+    before = len(log_lines())
     post("/submit", {"text": GOOD, "creator_id": "cap_warmup"}, timeout=120)
+    if len(log_lines()) == before:
+        sys.exit(f"The service answered, but nothing new appeared in {LOG}.\n"
+                 "It is probably running from a different folder (for example the clean-checkout copy). "
+                 "Stop it, then start it from THIS repository with: AI201_FAULT_INJECTION=1 python app.py")
 
     results = []
     for t in (1, 2, 3):
