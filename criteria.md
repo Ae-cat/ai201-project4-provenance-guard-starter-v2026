@@ -111,3 +111,40 @@ For 5 bad inputs (including at least one with missing text, one with empty text 
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+
+---
+
+# Capstone acceptance criteria — the catch-all error handler
+
+Written before any capstone results exist. The extension is a catch-all error handler on `/submit` (plus a `duration_ms` field in the log). Each criterion is tested over three trials and has to hold in all three.
+
+## 1. Crash response
+
+Of 10 deliberately triggered crashes on `/submit`, at least 9 return HTTP 500 with a JSON body containing `error` and `message`, and none of the response bodies contains "Traceback" or a file path.
+
+*Why:* a caller needs a consistent, structured answer when something unexpected fails, and a stack trace would show the service's internals to a stranger.
+
+## 2. Crash logging
+
+Of those same 10 crashes, 10 produce an `error` entry in the audit log with `error_type`, `duration_ms` and `creator_id`.
+
+*Why:* a failure that leaves no record is one nobody investigates.
+
+## 3. Duration tracking
+
+At least 95% of the decision, rejection and error entries written during the test run have a numeric `duration_ms` (present and not null).
+
+*Why:* timing is only useful if it is recorded on every outcome, not just on successful submissions.
+
+## 4. Original endpoints preserved
+
+All 23 of these checks pass: 10 normal `/submit` requests return 200 with all six fields (`content_id`, `guess`, `confidence`, `label`, `model_score`, `style_score`); 10 `/ping` requests return 200; one empty-text request returns 400; one over-length request returns 413; and the 7th request within a minute from one `creator_id` returns 429. None of them returns 500.
+
+*Why:* the catch-all must not swallow errors the service already handled on purpose.
+
+## 5. Crash handling when the log can't be written
+
+With the audit log made unwritable (`chmod 444 logs/audit.jsonl`), 5 of 5 requests that would crash still return a JSON 500 with `error` and `message`, with no HTML error page and no hang.
+
+*Why:* a logging failure is the one failure the service can't record, and the caller should still get an answer.
